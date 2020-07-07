@@ -23,6 +23,7 @@ class RawBitMap {
   // 检查第pos位置上的bit。1返回true，0返回false。
   bool Test(const uint32_t pos) {
     //   bits_[pos / BYTE_SIZE] & (1 << (pos % BYTE_SIZE));
+    return false;
   }
 
   private:

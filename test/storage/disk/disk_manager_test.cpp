@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 #include "common/config.h"
-
 namespace pidan {
 
 static void DeleteFile(const std::string &filename) { remove(filename.c_str()); }
@@ -17,8 +16,8 @@ class DiskManagerTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    DeleteFile("test.db");
     delete dm_;
+    DeleteFile("test.db");
   }
 
   DiskManager *dm_;

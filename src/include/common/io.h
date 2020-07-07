@@ -18,7 +18,7 @@ class PosixIOWrapper {
   template <class... Args>
   static int Open(const std::string &file, int oflag, Args... args) {
     while (true) {
-      int ret = open(file.c_str(), oflag, args...);
+      int ret = ::open(file.c_str(), oflag, args...);
       if (ret == -1) {
         if (errno == EINTR) continue;
         throw PosixError("Failed to open file with errno " + std::to_string(errno));
@@ -29,7 +29,7 @@ class PosixIOWrapper {
 
   static void Close(int fd);
 
-  static off_t lseek(int fd, off_t offset, int whence);
+  static off_t Lseek(int fd, off_t offset, int whence);
 
   static void WriteFully(int fd, const void *buffer, size_t nbytes);
 

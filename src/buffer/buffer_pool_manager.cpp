@@ -64,12 +64,10 @@ Page *BufferPoolManager::FetchPage(page_id_t page_id) {
 }
 
 bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
-    assert(page_id != INVALID_PAGE_ID);
-    return false;
+  assert(page_id != INVALID_PAGE_ID);
+  return false;
 }
 
-Page *BufferPoolManager::NewPage(page_id_t *page_id) {
-    
-}
+Page *BufferPoolManager::NewPage(page_id_t *page_id) { return nullptr; }
 
 }  // namespace pidan

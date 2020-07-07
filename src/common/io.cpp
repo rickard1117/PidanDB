@@ -2,9 +2,9 @@
 
 namespace pidan {
 
-off_t PosixIOWrapper::lseek(int fd, off_t offset, int whence) {
+off_t PosixIOWrapper::Lseek(int fd, off_t offset, int whence) {
   while (true) {
-    int rc = lseek(fd, offset, whence);
+    int rc = ::lseek(fd, offset, whence);
     if (rc == -1) {
       if (errno == EINTR) continue;
       throw PosixError("Failed to lseek with errno " + std::to_string(errno));
@@ -15,21 +15,22 @@ off_t PosixIOWrapper::lseek(int fd, off_t offset, int whence) {
 
 void PosixIOWrapper::Close(int fd) {
   while (true) {
-    int rc = close(fd);
+    int rc = ::close(fd);
     if (rc == -1) {
       if (errno == EINTR) continue;
-      throw PosixError("Failed to lseek with errno " + std::to_string(errno));
+      throw PosixError("Failed to close fd " + std::to_string(fd) + " with errno " + std::to_string(errno));
     }
+    return;
   }
 }
 
 void PosixIOWrapper::WriteFully(int fd, const void *buffer, size_t nbytes) {
   ssize_t total_written = 0;
-  while (total_written < nbytes) {
-    int rc = write(fd, reinterpret_cast<const char *>(buffer) + total_written, nbytes - total_written);
+  while (static_cast<size_t>(total_written) < nbytes) {
+    int rc = ::write(fd, reinterpret_cast<const char *>(buffer) + total_written, nbytes - total_written);
     if (rc == -1) {
       if (errno == EINTR) continue;
-      throw PosixError("Failed to lseek with errno " + std::to_string(errno));
+      throw PosixError("Failed to write with errno " + std::to_string(errno));
     }
     total_written += rc;
   }
@@ -37,11 +38,11 @@ void PosixIOWrapper::WriteFully(int fd, const void *buffer, size_t nbytes) {
 
 uint32_t PosixIOWrapper::ReadFully(int fd, void *buffer, size_t nbytes) {
   ssize_t total_read = 0;
-  while (total_read < nbytes) {
+  while (static_cast<size_t>(total_read) < nbytes) {
     int rc = read(fd, reinterpret_cast<char *>(buffer) + total_read, nbytes - total_read);
     if (rc == -1) {
       if (errno == EINTR) continue;
-      throw PosixError("Failed to lseek with errno " + std::to_string(errno));
+      throw PosixError("Failed to read with errno " + std::to_string(errno));
     }
     if (rc == 0) {
       break;
