@@ -6,7 +6,9 @@
 namespace pidan {
 class DiskManager {
  public:
-  DiskManager(const std::string &db_file);
+  explicit DiskManager(const std::string &db_file);
+  
+  ~DiskManager();
 
   void WritePage(page_id_t page_id, const char *data);
 

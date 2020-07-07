@@ -27,6 +27,8 @@ class PosixIOWrapper {
     }
   }
 
+  static void Close(int fd);
+
   static off_t lseek(int fd, off_t offset, int whence);
 
   static void WriteFully(int fd, const void *buffer, size_t nbytes);

@@ -1,4 +1,4 @@
-file(GLOB PIDAN_TEST_SRCS "${PROJECT_SOURCE_DIR}/test/*/*test.cpp")
+file(GLOB_RECURSE PIDAN_TEST_SRCS "${PROJECT_SOURCE_DIR}/test/*test.cpp")
 
 add_custom_target(build-tests COMMAND ${CMAKE_CTEST_COMMAND} --show-only)
 add_custom_target(check-tests COMMAND ${CMAKE_CTEST_COMMAND} --verbose)

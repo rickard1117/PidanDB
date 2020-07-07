@@ -4,12 +4,22 @@ namespace pidan {
 
 off_t PosixIOWrapper::lseek(int fd, off_t offset, int whence) {
   while (true) {
-    int ret = lseek(fd, offset, whence);
-    if (ret == -1) {
+    int rc = lseek(fd, offset, whence);
+    if (rc == -1) {
       if (errno == EINTR) continue;
       throw PosixError("Failed to lseek with errno " + std::to_string(errno));
     }
-    return ret;
+    return rc;
+  }
+}
+
+void PosixIOWrapper::Close(int fd) {
+  while (true) {
+    int rc = close(fd);
+    if (rc == -1) {
+      if (errno == EINTR) continue;
+      throw PosixError("Failed to lseek with errno " + std::to_string(errno));
+    }
   }
 }
 

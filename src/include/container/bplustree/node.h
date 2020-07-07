@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/macros.h"
 /**
  * 因为B+树中key是变长的，value是定长的，所以用key map来存储key和value。
  *
@@ -18,8 +19,21 @@
  * FREE SPACE |key2|val2|key1|val1|
  * --------------------------------
  */
-struct Node {};
 
-struct InnerNode : public Node {};
+// 所有类型的node都不可以构造，必须通过reinterpret_cast而来。
+class Node {
+ public:
+  MEM_REINTERPRET_CAST_ONLY(Node);
+  bool IsLeaf() const { return level_ == 0; }
+  uint16_t level_;
+};
 
-struct LeafNode : public Node {};
+template <typename KeyType, typename ValueType>
+class InnerNode : public Node {
+ public:
+};
+
+template <typename KeyType, typename ValueType>
+class LeafNode : public Node {
+ public:
+};

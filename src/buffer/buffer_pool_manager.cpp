@@ -69,7 +69,7 @@ bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
 }
 
 Page *BufferPoolManager::NewPage(page_id_t *page_id) {
-
+    
 }
 
 }  // namespace pidan
