@@ -11,6 +11,7 @@ DiskManager::DiskManager(const std::string &db_file)
   assert(db_file_ != -1);
 }
 
+
 DiskManager::~DiskManager() { PosixIOWrapper::Close(db_file_); }
 
 void DiskManager::WritePage(page_id_t page_id, const char *data) {
