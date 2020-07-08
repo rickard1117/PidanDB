@@ -68,6 +68,8 @@ bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
   return false;
 }
 
-Page *BufferPoolManager::NewPage(page_id_t *page_id) { return nullptr; }
+Page *BufferPoolManager::NewPage(page_id_t *page_id) { 
+  return nullptr;
+ }
 
 }  // namespace pidan

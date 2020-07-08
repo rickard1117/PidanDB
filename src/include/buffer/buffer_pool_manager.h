@@ -23,7 +23,8 @@ class BufferPoolManager {
   bool UnpinPage(page_id_t page_id, bool is_dirty);
 
   // void FlushPage(page_id_t page_id);
-
+  
+  // 创建一个新的page
   Page *NewPage(page_id_t *page_id);
 
   // void DeletePage(page_id_t);

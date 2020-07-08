@@ -17,4 +17,7 @@ static constexpr int32_t BPLUSTREE_SPLIT_THREASHOLD = 80;
 
 // B+树节点合并的阈值，当节点的填充率超过这个值时就需要合并。
 static constexpr int32_t BPLUSTREE_MERGE_THRESHOLD = 20;
+
+// 内存block大小，为1MB。
+static constexpr int32_t BLOCK_SIZE = 1 << 20;
 }
