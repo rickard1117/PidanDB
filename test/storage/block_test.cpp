@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+#include "test/test_util.h"
+
 namespace pidan {
 
 class BlockTest : public ::testing::Test {
@@ -28,5 +30,13 @@ TEST_F(BlockTest, Insert) {
     ASSERT_EQ(block_->ValueCount(), i);
   }
 }
+
+// TEST_F(BlockTest, Find) {
+//   std::vector<std::string> values;
+//   for (int i = 0; i < 10; i++) {
+//     // test::GenRandomString();
+//     auto value = std::to_string(i);
+//   }
+// }
 
 }  // namespace pidan
