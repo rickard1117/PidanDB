@@ -23,7 +23,6 @@ std::string GenRandomString(size_t min_size, size_t max_size) {
 
   std::string data;
   data.resize(random);
-  std::cout << "data size : " << data.size() << " random size = " << random << '\n';
   std::generate(begin(data), end(data), rbe);
   return data;
 }

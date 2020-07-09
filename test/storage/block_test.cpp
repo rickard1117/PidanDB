@@ -2,8 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include <iostream>
-
 #include "test/test_util.h"
 
 namespace pidan {
@@ -31,12 +29,36 @@ TEST_F(BlockTest, Insert) {
   }
 }
 
-// TEST_F(BlockTest, Find) {
-//   std::vector<std::string> values;
-//   for (int i = 0; i < 10; i++) {
-//     // test::GenRandomString();
-//     auto value = std::to_string(i);
-//   }
-// }
+// 测试场景：随机插入一系列字符串，然后将其读取出来，检查读取结果是否正确。
+TEST_F(BlockTest, Find) {
+  std::vector<std::string> values;
+  for (int i = 0; i < 10; i++) {
+    auto random_val = test::GenRandomString(1, 100);
+    values.push_back(random_val);
+  }
+
+  for (auto &val : values) {
+    ValueSlot val_slot = block_->Insert(nullptr, val.data(), val.size());
+    ASSERT_TRUE(val_slot.IsValid());
+    auto find_val = block_->Select(nullptr, val_slot);
+    ASSERT_EQ(val.compare(find_val), 0);
+  }
+  ASSERT_EQ(block_->ValueCount(), 10);
+}
+
+TEST_F(BlockTest, BlockFull) {
+  ValueSlot vs = block_->Insert(nullptr, reinterpret_cast<const char *>(block_), BLOCK_SIZE);
+  ASSERT_FALSE(vs.IsValid());
+
+  // 插入几个随机字符串
+  for (int i = 0; i < 10; i++) {
+    auto random_val = test::GenRandomString(1, 100);
+    auto slot = block_->Insert(nullptr, random_val.data(), random_val.size());
+    ASSERT_TRUE(slot.IsValid());
+  }
+
+  vs = block_->Insert(nullptr, reinterpret_cast<const char *>(block_), block_->GetFreeSpaceRemaining());
+  ASSERT_FALSE(vs.IsValid());
+}
 
 }  // namespace pidan
