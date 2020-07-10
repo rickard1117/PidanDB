@@ -36,6 +36,27 @@ class BPlusTree {
   using LNode = LeafNode<KeyType, ValueType>;
   using INode = InnerNode<KeyType, ValueType>;
 
+  bool keyEqual(const KeyType &lhs, const KeyType &rhs) const {
+    return !key_cmp_obj_(lhs, rhs) && !key_cmp_obj_(rhs, lhs);
+  }
+
+  bool keyLess(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(lhs, rhs); }
+
+  bool keyLessEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(rhs, lhs); }
+
+  bool keyGreater(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(rhs, lhs); }
+
+  bool keyGreaterEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(lhs, rhs); }
+
+  template <typename NodeType>
+  size_t FindLower(const NodeType *node, const KeyType &key) {
+    size_t idx = 0;
+    while (node->size() > idx && keyEqual(node->key(idx), key)) {
+      idx++;
+    }
+    return idx;
+  }
+
   // 从节点node开始查找key
   bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
                    ValueType *val, bool *need_restart) const {

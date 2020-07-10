@@ -26,7 +26,7 @@ namespace pidan {
 
 // 所有类型的node都不可以构造，必须通过reinterpret_cast而来。
 // Node节点中实现了Optimistic Coupling Locking，具体参考论文：The art of practical synchronization
-
+template <typename KeyType>
 class Node {
  public:
   bool IsLeaf() const { return level_ == 0; }
@@ -66,6 +66,10 @@ class Node {
   // 释放写锁并将节点标记为删除
   void WriteUnlockObsolete() { version_.fetch_add(3); }
 
+  size_t size() const {}
+
+  KeyType &key(size_t index) {}
+
  private:
   // spin lock，等待node节点解锁。
   uint64_t AwaitNodeUnlocked() const {
@@ -87,14 +91,15 @@ class Node {
   std::atomic<uint64_t> version_{0b100};
 };
 
-template <typename KeyType, typename ValueType>
+template <typename KeyType>
 class InnerNode : public Node {
  public:
-  
+  Node *GetChild(size_t index) const {}
 };
 
 template <typename KeyType, typename ValueType>
 class LeafNode : public Node {
  public:
+  ValueType &GetValue(size_t index) const {}
 };
 }  // namespace pidan
