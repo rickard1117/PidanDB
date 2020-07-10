@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "common/macros.h"
+#include "common/type.h"
 #include "container/bplustree/node.h"
 
 namespace pidan {
@@ -22,7 +23,7 @@ class BPlusTree {
     for (;;) {
       Node *node = root_.load();
       bool need_restart = false;
-      bool result = StartLookup(node, nullptr, key, value, &need_restart);
+      bool result = StartLookup(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
       if (need_restart) {
         // 查找失败，需要重启整个流程。
         continue;
@@ -31,29 +32,57 @@ class BPlusTree {
     }
   }
 
-  // 从节点node开始查找key
-  bool StartLookup(const Node *node, const Node *parent, const KeyType &key, ValueType *val, bool *need_restart) const {
-    // node->Re
-    
-  }
-
  private:
   using LNode = LeafNode<KeyType, ValueType>;
   using INode = InnerNode<KeyType, ValueType>;
 
-  // 从node节点开始插入key value
-  // void StartInsert(Node *node, Node *parent, const KeyType &key, const ValueType &value, Node **split_node,
-  //                  KeyType *split_key) {
-  // if (node->IsLeaf()) {
-  //   LNode *leaf = static_cast<LNode *>(node);
-  //   if (leaf->CheckSpace(key.size())) {
-  //     leaf->Insert();
-  //   } else {
-  //     LNode *sibling = leaf->Split();
+  // 从节点node开始查找key
+  bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
+                   ValueType *val, bool *need_restart) const {
+    uint64_t version;
+    if (!node->ReadLockOrRestart(&version)) {
+      *need_restart = true;
+      return false;
+    }
 
-  //   }
-  // }
-  // }
+    if (parent) {
+      if (!parent->ReadUnlockOrRestart(parent_version)) {
+        *need_restart = true;
+        return false;
+      }
+    }
+
+    if (node->IsLeaf()) {
+      const LNode *leaf = static_cast<const LNode *>(node);
+      size_t index = leaf->FindLower(key);
+
+      if (index > leaf->size()) {
+        if (!leaf->ReadUnlockOrRestart(version)) {
+          *need_restart = true;
+        } else {
+          *need_restart = false;
+        }
+        return false;
+      }
+
+      *val = leaf->GetValue(index);
+      if (!leaf->ReadUnlockOrRestart(version)) {
+        *need_restart = true;
+        return false;
+      }
+      *need_restart = false;
+      return true;
+    }
+
+    const INode *inner = static_cast<const INode *>(node);
+    const Node *child = inner->GetChild(inner->FindLower(key));
+    // 这里需要再次检查，以保证child指针的有效性。
+    if (!inner->CheckOrRestart(version)) {
+      *need_restart = true;
+      return false;
+    }
+    return StartLookup(child, node, version, key, val, need_start);
+  }
 
  private:
   std::atomic<Node *> root_;

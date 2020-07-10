@@ -26,6 +26,7 @@ namespace pidan {
 
 // 所有类型的node都不可以构造，必须通过reinterpret_cast而来。
 // Node节点中实现了Optimistic Coupling Locking，具体参考论文：The art of practical synchronization
+
 class Node {
  public:
   bool IsLeaf() const { return level_ == 0; }
@@ -38,10 +39,10 @@ class Node {
   }
 
   // 根据版本号来检查当前节点的锁是否还有效，有效返回true，否则返回false。
-  bool CheckOrRestart(uint64_t version) const { ReadLockOrRestart(version); }
+  bool CheckOrRestart(uint64_t version) const { return ReadUnlockOrRestart(version); }
 
   // 释放读锁，如果释放成功，则返回true。否则返回false。
-  bool ReadUnlockOrRestart(uint64_t version) { return version != version_.load(); }
+  bool ReadUnlockOrRestart(uint64_t version) const { return version != version_.load(); }
 
   // 将读锁升级为写锁，升级成功返回true，否则返回false。
   bool UpgradeToWriteLockOrRestart(uint64_t version) {
@@ -56,7 +57,7 @@ class Node {
       if (!success) {
         return false;
       }
-    } while (!UpgradeToWriteLockOrRestart(version))
+    } while (!UpgradeToWriteLockOrRestart(version));
   }
 
   // 释放写锁
@@ -83,12 +84,13 @@ class Node {
   uint64_t SetLockedBit(uint64_t version) { return version + 2; }
 
   uint16_t level_;
-  std::atomic<uint64_t> version_{0};
+  std::atomic<uint64_t> version_{0b100};
 };
 
 template <typename KeyType, typename ValueType>
 class InnerNode : public Node {
  public:
+  
 };
 
 template <typename KeyType, typename ValueType>
