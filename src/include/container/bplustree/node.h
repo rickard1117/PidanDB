@@ -1,6 +1,10 @@
 #pragma once
 
+#include <atomic>
+
 #include "common/macros.h"
+
+namespace pidan {
 /**
  * 因为B+树中key是变长的，value是定长的，所以用key map来存储key和value。
  *
@@ -21,11 +25,65 @@
  */
 
 // 所有类型的node都不可以构造，必须通过reinterpret_cast而来。
+// Node节点中实现了Optimistic Coupling Locking，具体参考论文：The art of practical synchronization
 class Node {
  public:
-  MEM_REINTERPRET_CAST_ONLY(Node);
   bool IsLeaf() const { return level_ == 0; }
+
+  // 为节点加读锁，加锁成功返回true,并且返回当前节点的版本号。
+  // 如果加锁失败，返回false。
+  bool ReadLockOrRestart(uint64_t *version) const {
+    *version = AwaitNodeUnlocked();
+    return !IsObsolete(*version);
+  }
+
+  // 根据版本号来检查当前节点的锁是否还有效，有效返回true，否则返回false。
+  bool CheckOrRestart(uint64_t version) const { ReadLockOrRestart(version); }
+
+  // 释放读锁，如果释放成功，则返回true。否则返回false。
+  bool ReadUnlockOrRestart(uint64_t version) { return version != version_.load(); }
+
+  // 将读锁升级为写锁，升级成功返回true，否则返回false。
+  bool UpgradeToWriteLockOrRestart(uint64_t version) {
+    return version_.compare_exchange_strong(version, SetLockedBit(version));
+  }
+
+  // 加写锁，成功返回true，失败返回false。
+  bool WriteLockOrRestart() {
+    uint64_t version;
+    do {
+      bool success = ReadLockOrRestart(&version);
+      if (!success) {
+        return false;
+      }
+    } while (!UpgradeToWriteLockOrRestart(version))
+  }
+
+  // 释放写锁
+  void WriteUnlock() { version_.fetch_add(2); }
+
+  // 释放写锁并将节点标记为删除
+  void WriteUnlockObsolete() { version_.fetch_add(3); }
+
+ private:
+  // spin lock，等待node节点解锁。
+  uint64_t AwaitNodeUnlocked() const {
+    uint64_t version = version_.load();
+    while ((version & 2) == 2) {
+      _mm_pause();
+      version = version_.load();
+    }
+    return version;
+  }
+
+  // 检查借点是否被标记为删除
+  bool IsObsolete(uint64_t version) const { return (version & 1) == 1; }
+
+  // 设置节点写锁标记
+  uint64_t SetLockedBit(uint64_t version) { return version + 2; }
+
   uint16_t level_;
+  std::atomic<uint64_t> version_{0};
 };
 
 template <typename KeyType, typename ValueType>
@@ -37,3 +95,4 @@ template <typename KeyType, typename ValueType>
 class LeafNode : public Node {
  public:
 };
+}  // namespace pidan
