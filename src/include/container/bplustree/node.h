@@ -10,20 +10,27 @@ namespace pidan {
 /**
  * 因为B+树中key是变长的，value是定长的，所以用key map来存储key和value。
  *
- * Node 格式：
+ * Node 通用格式：
  * ----------------------------------------------
  * | HEADER | ... FREE SPACE ... | ... DATA ... |
  * ----------------------------------------------
+ *                               ^
+ *                        free space offset
+ * 
+ * 其中，InnerNode的HEADER部分格式，以字节为单位：
+ * ------------------------------------------------------------------------------------------------------------------------------------
+ * level(2) | size(2) | free space offset(2) | padding(2) | version(8) | last_child_pointer(8) | key1_offset(2) | key1_size(2)| ... |
+ * ------------------------------------------------------------------------------------------------------------------------------------
  *
- * HEADER格式，以字节为单位：
- * -----------------------------------------------------------------------------------
- * level(2) | slot_use(2) | FreeSpaceOffset(2) | slot1_offset(2) | slot1_size(2)| ...|
- * -----------------------------------------------------------------------------------
- *
- * DATA格式，内部节点和叶子节点的value类型不同，长度也不一样，但都是定长的。
- * --------------------------------
- * FREE SPACE |key2|val2|key1|val1|
- * --------------------------------
+ * LeafNode的HEADER格式：
+ * --------------------------------------------------------------------------------------------------------------------------------
+ * level(2) | size(2) | free space offset(2) | padding(2) | version(8) | prev(8) | next(8) | key1_offset(2) | key1_size(2)| ... |
+ * --------------------------------------------------------------------------------------------------------------------------------
+ * 
+ * DATA格式，虽然内部节点和叶子节点的value类型不同，但都是定长的。
+ * ------------------------------------------
+ * | FREE SPACE | key2 | val2 | key1 | val1 |
+ * ------------------------------------------
  */
 
 // 所有类型的node都不可以构造，必须通过reinterpret_cast而来。
@@ -123,6 +130,11 @@ class InnerNode : public Node {
   bool EnoughSpaceForKey(size_t key_size) { FreeSpaceRemaining() >= key_size + POINTER_SIZE + SIZE_OFFSET + SIZE_SIZE; }
 
  private:
+  const KeyType key(uint16_t index) {
+    assert(index < size_);
+    data_[]
+  }
+
   const KeyType key(uint16_t offset, uint16_t size) const {
     assert(offset < index_header_);
     return KeyType(&data_[offset], size);
