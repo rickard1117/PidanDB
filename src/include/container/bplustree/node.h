@@ -123,23 +123,24 @@ class Node {
 };
 
 template <typename KeyType>
+using BPplusTreeKeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
+
+template <typename KeyType>
 class InnerNode : public Node {
  public:
-  using BPplusTreeKeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
-
   InnerNode(uint16_t level, Node *left_child, Node *right_child, const KeyType &key)
       : Node(level, 0, DATA_CAPACITY), first_child_(left_child) {
     InsertKeyAndChild(0, key, right_child);
   }
 
   // 根据key来找到对应的child node指针
-  Node *FindChild(const KeyType &key, BPplusTreeKeyLess key_less) {
+  Node *FindChild(const KeyType &key, BPplusTreeKeyLess<KeyType> key_less) {
     uint16_t index = FindLower(key, key_less);
     return GetChildAt(index);
   }
 
   // 向节点中插入一个key,成功返回true,没有足够空间则返回false。
-  bool Insert(const KeyType &key, Node *child, BPplusTreeKeyLess key_less) {
+  bool Insert(const KeyType &key, Node *child, BPplusTreeKeyLess<KeyType> key_less) {
     if (!EnoughSpaceForKey(key.size())) {
       return false;
     }
@@ -156,7 +157,7 @@ class InnerNode : public Node {
     // 首先在DATA区插入key和child
     free_space_end_ -= key.size() + POINTER_SIZE;
     std::memcpy(&data_[free_space_end_], key.data(), key.size());
-    
+
     std::memcpy(&data_[free_space_end_ + key.size()], &child, POINTER_SIZE);
 
     // 在index部分插入key offset和key size
@@ -199,15 +200,13 @@ class InnerNode : public Node {
     uint16_t key_offset, key_size;
     // 因为指针比节点多一个（就是first_child_—），这里要找到上一个key的下标所对应的指针。
     ReadIndex(index - 1, &key_offset, &key_size);
-    // const Node *child;
     return *reinterpret_cast<Node **>(&data_[key_offset + key_size]);
   }
 
   // 在Node中找到第一个大于等于target的key，返回它的下标。
   // 如果没找到，返回的是最后一个key的下标 + 1，即包含的key的树目。
-  uint16_t FindLower(const KeyType &target, BPplusTreeKeyLess key_less) const {
+  uint16_t FindLower(const KeyType &target, BPplusTreeKeyLess<KeyType> key_less) const {
     uint16_t idx = 0;
-    // key(idx)
     while (idx < size_ && key_less(KeyAt(idx), target)) {
       idx++;
     }
