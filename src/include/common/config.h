@@ -22,11 +22,11 @@ static constexpr int32_t BPLUSTREE_MERGE_THRESHOLD = 20;
 static constexpr int32_t BLOCK_SIZE = 1 << 20;
 
 // B+树索引中内部节点的大小
-static constexpr uint32_t BPLUS_TREE_INNERNODE_SIZE = 4096;
+static constexpr uint32_t BPLUSTREE_INNERNODE_SIZE = 4096;
 
 // B+树索引中叶子节点的大小
-static constexpr uint32_t BPLUS_TREE_LEAFNODE_SIZE = 4096;
+static constexpr uint32_t BPLUSTREE_LEAFNODE_SIZE = 4096;
 
 // B+树节点大小
-static constexpr uint32_t BPLUSTREE_NODE_SIZE = 4096;
+// static constexpr uint32_t BPLUSTREE_NODE_SIZE = 4096;
 }
