@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <iostream>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -26,7 +27,7 @@ namespace pidan {
  *
  * 其中，InnerNode的HEADER部分布局如下，其中最后存储每个key的offset和size的叫做index部分
  * --------------------------------------------------------------------------------------------------------------------
- * level(2) | size(2) | free space start(2) | free space end(2) | version(8) | last_child_pointer(8) | key1_offset(2) |
+ * level(2) | size(2) | free space start(2) | free space end(2) | version(8) | first child(8) | key1_offset(2) |
  * key1_size(2)| ... |
  * --------------------------------------------------------------------------------------------------------------------
  *
@@ -121,15 +122,14 @@ class Node {
   std::atomic<uint64_t> version_{0b100};  // 用来作为OLC锁的版本号，具体作用可以参阅论文。
 };
 
-
 template <typename KeyType>
 class InnerNode : public Node {
  public:
   using BPplusTreeKeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
 
   InnerNode(uint16_t level, Node *left_child, Node *right_child, const KeyType &key)
-      : Node(level, sizeof(Node) + POINTER_SIZE, DATA_CAPACITY), last_child_(right_child) {
-    InsertKeyAndChild(0, key, left_child);
+      : Node(level, 0, DATA_CAPACITY), first_child_(left_child) {
+    InsertKeyAndChild(0, key, right_child);
   }
 
   // 根据key来找到对应的child node指针
@@ -139,7 +139,7 @@ class InnerNode : public Node {
   }
 
   // 向节点中插入一个key,成功返回true,没有足够空间则返回false。
-  bool Insert(const KeyType &key, const Node *child, BPplusTreeKeyLess key_less) {
+  bool Insert(const KeyType &key, Node *child, BPplusTreeKeyLess key_less) {
     if (!EnoughSpaceForKey(key.size())) {
       return false;
     }
@@ -151,22 +151,13 @@ class InnerNode : public Node {
  private:
   void InsertKeyAndChild(uint16_t index, const KeyType &key, Node *child) {
     assert(index <= size_);
+    // 不管任何形式的插入都不会改变first_child_的值
 
-    // 在DATA区插入key和child
+    // 首先在DATA区插入key和child
     free_space_end_ -= key.size() + POINTER_SIZE;
     std::memcpy(&data_[free_space_end_], key.data(), key.size());
-
-    if (index < size_) {
-      // last_child_不需要改变
-      std::memcpy(&data_[free_space_end_ + key.size()], &child, POINTER_SIZE);
-    } else {
-      assert(index * (SIZE_OFFSET + SIZE_SIZE) == free_space_start_);
-      // index == size_，last_child_需要改变
-      // 将last_child_指针复制到DATA区
-      std::memcpy(&data_[free_space_end_ + key.size()], &last_child_, POINTER_SIZE);
-      // 将要插入的指针替换last_child_
-      last_child_ = child;
-    }
+    
+    std::memcpy(&data_[free_space_end_ + key.size()], &child, POINTER_SIZE);
 
     // 在index部分插入key offset和key size
     uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
@@ -202,11 +193,12 @@ class InnerNode : public Node {
   // 根据index的下标找到子节点指针
   Node *GetChildAt(uint16_t index) {
     assert(index <= size_);
-    if (index == size_) {
-      return last_child_;
+    if (index == 0) {
+      return first_child_;
     }
     uint16_t key_offset, key_size;
-    ReadIndex(index, &key_offset, &key_size);
+    // 因为指针比节点多一个（就是first_child_—），这里要找到上一个key的下标所对应的指针。
+    ReadIndex(index - 1, &key_offset, &key_size);
     // const Node *child;
     return *reinterpret_cast<Node **>(&data_[key_offset + key_size]);
   }
@@ -226,8 +218,8 @@ class InnerNode : public Node {
   static constexpr uint16_t SIZE_OFFSET = 2;
   static constexpr uint16_t SIZE_SIZE = 2;
   static constexpr uint32_t DATA_CAPACITY = BPLUSTREE_INNERNODE_SIZE - sizeof(Node) - sizeof(Node *);
-  // InnerNode中，child指针数目比key多一个，所以用一个额外的指针保存指向最右边孩子节点的指针。
-  Node *last_child_;
+  // InnerNode中，child指针数目比key多一个，所以用一个额外的指针保存指向最左边孩子节点的指针。
+  Node *first_child_;
   std::byte data_[DATA_CAPACITY];  // 从index部分开始的内存部分都属于data_
 };
 
