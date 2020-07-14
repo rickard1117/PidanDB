@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
-#include <iostream>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -108,53 +107,29 @@ class Node {
   uint64_t SetLockedBit(uint64_t version) { return version + 2; }
 
  protected:
-  // using BPplusTreeKeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
-
-  Node(uint16_t level) : level_(level) {}
-
-  // 在Node中找到第一个大于等于target的key，返回它的下标。
-  // 如果没找到，返回的是最后一个key的下标 + 1，即包含的key的树目。
-  // uint16_t FindLower(const KeyType &target, BPplusTreeKeyLess key_less) const {
-  //   uint16_t idx = 0;
-  //   while (idx < size_ && key_less(KeyAt(idx), target)) {
-  //     idx++;
-  //   }
-  //   return idx;
-  // }
-
-  // // 根据index部分的下标来获取一个key
-  // KeyType KeyAt(uint16_t index) const {
-  //   assert(index < size_);
-  //   uint16_t key_offset, key_size;
-  //   ReadIndex(index, &key_offset, &key_size);
-  //   return KeyType(reinterpret_cast<const char *>(DataOffset(key_offset)), key_size);
-  // }
-
-  // void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
-  //   uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
-  //   *key_offset = *reinterpret_cast<const uint16_t *>(DataOffset(index_offset));
-  //   *key_size = *reinterpret_cast<const uint16_t *>(DataOffset(index_offset + SIZE_OFFSET));
-  // }
-
-  // std::byte *DataOffset(uint16_t offset) = 0;
-
-  uint16_t level_;    // 节点所在的level，叶子节点是0, 向上递增。
-  uint16_t size_{0};  // 节点中存储的key的数量，如果是内部节点的话，child数目是size_ + 1
-
-  std::atomic<uint64_t> version_{0b100};  // 用来作为OLC锁的版本号，具体作用可以参阅论文。
+  Node(uint16_t level) : level_(level), size_(0), version_(0b100) {}
+  uint16_t level_;  // 节点所在的level，叶子节点是0, 向上递增。
+  uint16_t size_;   // 节点中存储的key的数量，如果是内部节点的话，child数目是size_ + 1
+  std::atomic<uint64_t> version_;  // 用来作为OLC锁的版本号，具体作用可以参阅论文。
 };
 
 template <typename KeyType>
-using BPplusTreeKeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
+using KeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
+
+template <typename KeyType>
+bool key_equal(KeyLess<KeyType> key_less, const KeyType &key1, const KeyType &key2) {
+  return !key_less(key1, key2) && !key_less(key2, key1);
+}
 
 template <typename KeyType, typename ValueType, uint32_t SIZE>
 class KeyMap {
  public:
   KeyMap() : free_space_start_(0), free_space_end_(SIZE), size_(0) {}
 
-  uint16_t FindLower(const KeyType &target, BPplusTreeKeyLess<KeyType> key_less) const {
+  // 在keymap中找到第一个不小于key的下标。下标的最小值为0，最大值为Size()的返回值。
+  uint16_t FindLower(const KeyType &key, KeyLess<KeyType> key_less) const {
     uint16_t idx = 0;
-    while (idx < size_ && key_less(KeyAt(idx), target)) {
+    while (idx < size_ && key_less(KeyAt(idx), key)) {
       idx++;
     }
     return idx;
@@ -174,6 +149,15 @@ class KeyMap {
     return *reinterpret_cast<ValueType *>(&data_[key_offset + key_size]);
   }
 
+  KeyType KeyValueAt(uint16_t index, ValueType *val) {
+    assert(index < size_);
+    uint16_t key_offset, key_size;
+    ReadIndex(index, &key_offset, &key_size);
+    *val = *reinterpret_cast<ValueType *>(&data_[key_offset + key_size]);
+    return KeyType(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
+  }
+
+  // 在下标为index的位置插入key和value
   void InsertKeyValue(uint16_t index, const KeyType &key, const ValueType &val) {
     assert(index <= size_);
 
@@ -191,11 +175,14 @@ class KeyMap {
     *reinterpret_cast<uint16_t *>(&data_[index_offset + SIZE_OFFSET]) = static_cast<uint16_t>(key.size());
 
     free_space_start_ += SIZE_OFFSET + SIZE_SIZE;
+    assert(free_space_start_ <= free_space_end_);
     size_++;
   }
 
   // 检查是否还有足够的空间可以插入大小为key_size的key以及一个定长的value
   bool EnoughSpace(size_t key_size) { return FreeSpaceRemaining() >= key_size + SIZE_VALUE + SIZE_OFFSET + SIZE_SIZE; }
+
+  uint16_t Size() const { return size_; }
 
  private:
   void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
@@ -226,7 +213,7 @@ class InnerNode : public Node {
   }
 
   // 根据key来找到对应的child node指针
-  Node *FindChild(const KeyType &key, BPplusTreeKeyLess<KeyType> key_less) {
+  Node *FindChild(const KeyType &key, KeyLess<KeyType> key_less) {
     uint16_t index = key_map_.FindLower(key, key_less);
     if (index == 0) {
       return first_child_;
@@ -236,7 +223,7 @@ class InnerNode : public Node {
   }
 
   // 向节点中插入一个key,成功返回true,没有足够空间则返回false。
-  bool Insert(const KeyType &key, Node *child, BPplusTreeKeyLess<KeyType> key_less) {
+  bool Insert(const KeyType &key, Node *child, KeyLess<KeyType> key_less) {
     if (!key_map_.EnoughSpace(key.size())) {
       return false;
     }
@@ -253,85 +240,41 @@ class InnerNode : public Node {
   KeyMap<KeyType, Node *, BPLUSTREE_INNERNODE_SIZE - sizeof(Node) - POINTER_SIZE> key_map_;
 };
 
-// template <typename KeyType, typename ValueType>
-// class LeafNode : public Node<KeyType> {
-//  public:
-//   LeafNode() : Node(0, 0, DATA_CAPACITY), prev_(nullptr), next_(nullptr) {}
+template <typename KeyType, typename ValueType>
+class LeafNode : public Node {
+ public:
+  LeafNode() : Node(0), prev_(nullptr), next_(nullptr) {}
 
-//   bool Insert(const KeyType &key, const ValueType &val, BPplusTreeKeyLess<KeyType> key_less) {
-//     if (!EnoughSpace(key.size())) {
-//       return false;
-//     }
-//     uint16_t index = FindLower(key, key_less);
-//     InsertKeyAndValue(index, key, child);
-//     return true;
-//   }
+  // 查找key所对应的val，如果不存在就返回false
+  bool FindValue(const KeyType &key, KeyLess<KeyType> key_less, ValueType *val) {
+    uint16_t index = key_map_.FindLower(key, key_less);
+    if (index >= key_map_.Size()) {
+      return false;
+    }
+    KeyType result_key = key_map_.KeyValueAt(index, val);
+    return key_equal(key_less, result_key, key);
+  }
 
-//   bool FindValue(const KeyType &key, BPplusTreeKeyLess<KeyType> key_less, ValueType *val) const {
-//     uint16_t index = FindLower(key, key_less);
-//     if (index >= size_) {
-//       return false;
-//     }
-//     GetValueAt(index, val);
-//     return true;
-//   }
+  // 插入key value，如果key已经存在，则插入失败。
+  bool InsertUnique(const KeyType &key, KeyLess<KeyType> key_less, const ValueType &val, bool *not_enough_space) {
+    if (!key_map_.EnoughSpace(key.size())) {
+      *not_enough_space = true;
+      return false;
+    }
 
-//   uint16_t Size() const { return size_; }
+    uint16_t index = key_map_.FindLower(key, key_less);
+    if (index < key_map_.Size() && key_equal(key_less, key_map_.KeyAt(index), key)) {
+      *not_enough_space = false;
+      return false;
+    }
+    key_map_.InsertKeyValue(index, key, val);
+    return true;
+  }
 
-//  private:
-//   bool EnoughSpace(size_t key_size) { return FreeSpaceRemaining() >= key_size + VALUE_SIZE + SIZE_OFFSET + SIZE_SIZE;
-//   }
-
-//   uint16_t FindLower(const KeyType &target, BPplusTreeKeyLess<KeyType> key_less) const {
-//     uint16_t idx = 0;
-//     while (idx < size_ && key_less(KeyAt(idx), target)) {
-//       idx++;
-//     }
-//     return idx;
-//   }
-
-//   KeyType KeyAt(uint16_t index) const {
-//     assert(index < size_);
-//     uint16_t key_offset, key_size;
-//     ReadIndex(index, &key_offset, &key_size);
-//     return KeyType(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
-//   }
-
-//   void GetValueAt(uint16_t index, ValueType *val) {
-//     assert(index < size_);
-//     uint16_t key_offset, key_size;
-//     ReadIndex(index, &key_offset, &key_size);
-//     *val = *reinterpret_cast<ValueType *>(&data_[key_offset + key_size]);
-//   }
-
-//   void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
-//     uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
-//     *key_offset = *reinterpret_cast<const uint16_t *>(&data_[index_offset]);
-//     *key_size = *reinterpret_cast<const uint16_t *>(&data_[index_offset + SIZE_OFFSET]);
-//   }
-
-//   void InsertKeyAndValue(uint16_t index, const KeyType &key, const ValueType &val) {
-//     assert(index <= size_);
-
-//     free_space_end_ -= key.size() + VALUE_SIZE;
-//     std::memcpy(&data_[free_space_end_], key.data(), key.size());
-//     std::memcpy(&data_[free_space_end_ + key.size()], &child, VALUE_SIZE);
-
-//     uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
-//     std::copy_backward(&data_[index_offset], &data_[free_space_start_],
-//                        &data_[free_space_start_ + SIZE_OFFSET + SIZE_SIZE]);
-//     *reinterpret_cast<uint16_t *>(&data_[index_offset]) = free_space_end_;
-//     *reinterpret_cast<uint16_t *>(&data_[index_offset + SIZE_OFFSET]) = static_cast<uint16_t>(key.size());
-
-//     free_space_start_ += SIZE_OFFSET + SIZE_SIZE;
-//     size_++;
-//   }
-
-//   static constexpr uint32_t DATA_CAPACITY = BPLUSTREE_LEAFNODE_SIZE - sizeof(Node) - 2 * POINTER_SIZE;
-//   static constexpr uint32_t VALUE_SIZE = sizeof(ValueType);
-//   Node *prev_;
-//   Node *next_;
-//   std::byte data_[DATA_CAPACITY];
-// };
+ private:
+  Node *prev_;
+  Node *next_;
+  KeyMap<KeyType, ValueType, BPLUSTREE_LEAFNODE_SIZE - POINTER_SIZE * 2> key_map_;
+};
 
 }  // namespace pidan
