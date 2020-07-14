@@ -8,6 +8,7 @@
 namespace pidan {
 
 using Key = std::string;
+using Value = uint64_t;
 using KeyComparator = std::less<Key>;
 
 TEST(BPlusTreeNodeTest, InnerNodeInsertAndFind) {
@@ -51,8 +52,8 @@ TEST(BPlusTreeNodeTest, InnerNodeInsertAndFind) {
 
 TEST(BPlusTreeNodeTest, LeafNodeInsertAndFind) {
   const KeyComparator comparator;
-  LeafNode<Key, uint64_t> node;
-  uint64_t val = 0;
+  LeafNode<Key, Value> node;
+  Value val = 0;
   ASSERT_FALSE(node.FindValue("1", comparator, &val));
   bool not_enough_space = false;
   ASSERT_TRUE(node.InsertUnique("1", comparator, 1, &not_enough_space));
@@ -61,6 +62,22 @@ TEST(BPlusTreeNodeTest, LeafNodeInsertAndFind) {
   ASSERT_FALSE(not_enough_space);
   ASSERT_TRUE(node.InsertUnique("2", comparator, 2, &not_enough_space));
   ASSERT_FALSE(not_enough_space);
+}
+
+TEST(BPlusTreeNodeTest, LeafNodeSplit) {}
+
+TEST(BPlusTreeNodeTest, OneNodeBPTree) {
+  // 测试最简单的场景，B+树中只有一个根节点。
+  BPlusTree<Key, Value> tree;
+  Value temp_val;
+
+  for (int v = 1; v < 100; ++v) {
+    std::string k = std::to_string(v);
+    ASSERT_FALSE(tree.Lookup(k, &temp_val));
+    ASSERT_TRUE(tree.InsertUnique(k, v));
+    ASSERT_TRUE(tree.Lookup(k, &temp_val));
+    ASSERT_EQ(temp_val, v);
+  }
 }
 
 }  // namespace pidan

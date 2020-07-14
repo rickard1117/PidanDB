@@ -9,105 +9,98 @@
 namespace pidan {
 
 // 支持变长key，定长value，非重复key的线程安全B+树。
-// template <typename KeyType, typename ValueType, typename KeyComparator = std::less<KeyType>>
-// class BPlusTree {
-//  public:
-//   // struct ConstIterator {};
+template <typename KeyType, typename ValueType, typename KeyComparator = std::less<KeyType>>
+class BPlusTree {
+ public:
+  BPlusTree() : root_(new LNode), key_cmp_obj_(KeyComparator()) {}
 
-//  public:
-//   // 将迭代器定位到一个指定的位置，迭代器是只读的，不可以用于修改。
-//   // ScanIterator Begin(const KeyType &key);
+  // 查找key对应的value，找到返回true，否则返回false。
+  bool Lookup(const KeyType &key, ValueType *value) const {
+    for (;;) {
+      Node *node = root_.load();
+      bool need_restart = false;
+      bool result = StartLookup(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
+      if (need_restart) {
+        // 查找失败，需要重启整个流程。
+        continue;
+      }
+      return result;
+    }
+  }
 
-//   // 查找key对应的value，找到返回true，否则返回false。
-//   bool Lookup(const KeyType &key, ValueType *value) const {
-//     for (;;) {
-//       Node *node = root_.load();
-//       bool need_restart = false;
-//       bool result = StartLookup(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
-//       if (need_restart) {
-//         // 查找失败，需要重启整个流程。
-//         continue;
-//       }
-//       return result;
-//     }
-//   }
+  // 插入一对key value，要求key是唯一的。如果key已经存在则返回false，插入成功返回true。
+  bool InsertUnique(const KeyType &key, const ValueType &val) {
+    Node *node = root_.load();
+    if (node->IsLeaf()) {
+      LNode *leaf = static_cast<LNode *>(node);
+      bool need_split = false;
+      if (leaf->InsertUnique(key, key_cmp_obj_, val, &need_split)) {
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
 
-//  private:
-//   using LNode = LeafNode<KeyType, ValueType>;
-//   using INode = InnerNode<KeyType, ValueType>;
+ private:
+  using LNode = LeafNode<KeyType, ValueType>;
+  using INode = InnerNode<KeyType>;
 
-//   bool keyEqual(const KeyType &lhs, const KeyType &rhs) const {
-//     return !key_cmp_obj_(lhs, rhs) && !key_cmp_obj_(rhs, lhs);
-//   }
+  //   bool keyEqual(const KeyType &lhs, const KeyType &rhs) const {
+  //     return !key_cmp_obj_(lhs, rhs) && !key_cmp_obj_(rhs, lhs);
+  //   }
 
-//   bool keyLess(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(lhs, rhs); }
+  //   bool keyLess(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(lhs, rhs); }
 
-//   bool keyLessEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(rhs, lhs); }
+  //   bool keyLessEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(rhs, lhs); }
 
-//   bool keyGreater(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(rhs, lhs); }
+  //   bool keyGreater(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(rhs, lhs); }
 
-//   bool keyGreaterEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(lhs, rhs); }
+  //   bool keyGreaterEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(lhs, rhs); }
 
-//   template <typename NodeType>
-//   size_t FindLower(const NodeType *node, const KeyType &key) {
-//     size_t idx = 0;
-//     while (node->size() > idx && keyEqual(node->key(idx), key)) {
-//       idx++;
-//     }
-//     return idx;
-//   }
+  // 从节点node开始查找key，没有找到则返回false
+  bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
+                   ValueType *val, bool *need_restart) const {
+    uint64_t version;
 
-//   // 从节点node开始查找key
-//   bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
-//                    ValueType *val, bool *need_restart) const {
-//     uint64_t version;
-//     if (!node->ReadLockOrRestart(&version)) {
-//       *need_restart = true;
-//       return false;
-//     }
+    if (!node->ReadLockOrRestart(&version)) {
+      std::cerr << "2" << '\n';
+      *need_restart = true;
+      return false;
+    }
 
-//     if (parent) {
-//       if (!parent->ReadUnlockOrRestart(parent_version)) {
-//         *need_restart = true;
-//         return false;
-//       }
-//     }
+    if (parent) {
+      if (!parent->ReadUnlockOrRestart(parent_version)) {
+        *need_restart = true;
+        return false;
+      }
+    }
 
-//     if (node->IsLeaf()) {
-//       const LNode *leaf = static_cast<const LNode *>(node);
-//       size_t index = leaf->FindLower(key);
+    if (node->IsLeaf()) {
+      const LNode *leaf = static_cast<const LNode *>(node);
+      bool result = leaf->FindValue(key, key_cmp_obj_, val);
+      if (!leaf->ReadUnlockOrRestart(version)) {
+        *need_restart = true;
+        return false;
+      }
+      *need_restart = false;
+      return result;
+    }
 
-//       if (index > leaf->size()) {
-//         if (!leaf->ReadUnlockOrRestart(version)) {
-//           *need_restart = true;
-//         } else {
-//           *need_restart = false;
-//         }
-//         return false;
-//       }
+    const INode *inner = static_cast<const INode *>(node);
+    const Node *child = inner->FindChild(key, key_cmp_obj_);
+    assert(child != nullptr);
+    // 这里需要再次检查，以保证child指针的有效性。
+    if (!inner->CheckOrRestart(version)) {
+      *need_restart = true;
+      return false;
+    }
+    return StartLookup(child, node, version, key, val, need_restart);
+  }
 
-//       *val = leaf->GetValue(index);
-//       if (!leaf->ReadUnlockOrRestart(version)) {
-//         *need_restart = true;
-//         return false;
-//       }
-//       *need_restart = false;
-//       return true;
-//     }
-
-//     const INode *inner = static_cast<const INode *>(node);
-//     const Node *child = inner->GetChild(inner->FindLower(key));
-//     // 这里需要再次检查，以保证child指针的有效性。
-//     if (!inner->CheckOrRestart(version)) {
-//       *need_restart = true;
-//       return false;
-//     }
-//     return StartLookup(child, node, version, key, val, need_start);
-//   }
-
-//  private:
-//   std::atomic<Node *> root_;
-//   const KeyComparator key_cmp_obj_;
-//   // const ValueEqualityChecker val_eq_obj_;
-// };
+ private:
+  std::atomic<Node *> root_;
+  const KeyComparator key_cmp_obj_;
+  // const ValueEqualityChecker val_eq_obj_;
+};
 }  // namespace pidan

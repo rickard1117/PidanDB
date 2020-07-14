@@ -62,7 +62,7 @@ class Node {
   bool CheckOrRestart(uint64_t version) const { return ReadUnlockOrRestart(version); }
 
   // 释放读锁，释放成功返回true。否则返回false。
-  bool ReadUnlockOrRestart(uint64_t version) const { return version != version_.load(); }
+  bool ReadUnlockOrRestart(uint64_t version) const { return version == version_.load(); }
 
   // 将读锁升级为写锁，升级成功返回true，否则返回false。
   bool UpgradeToWriteLockOrRestart(uint64_t version) {
@@ -142,18 +142,18 @@ class KeyMap {
     return KeyType(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
   }
 
-  ValueType ValueAt(uint16_t index) {
+  ValueType ValueAt(uint16_t index) const {
     assert(index < size_);
     uint16_t key_offset, key_size;
     ReadIndex(index, &key_offset, &key_size);
-    return *reinterpret_cast<ValueType *>(&data_[key_offset + key_size]);
+    return *reinterpret_cast<const ValueType *>(&data_[key_offset + key_size]);
   }
 
-  KeyType KeyValueAt(uint16_t index, ValueType *val) {
+  KeyType KeyValueAt(uint16_t index, ValueType *val) const {
     assert(index < size_);
     uint16_t key_offset, key_size;
     ReadIndex(index, &key_offset, &key_size);
-    *val = *reinterpret_cast<ValueType *>(&data_[key_offset + key_size]);
+    *val = *reinterpret_cast<const ValueType *>(&data_[key_offset + key_size]);
     return KeyType(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
   }
 
@@ -213,7 +213,7 @@ class InnerNode : public Node {
   }
 
   // 根据key来找到对应的child node指针
-  Node *FindChild(const KeyType &key, KeyLess<KeyType> key_less) {
+  Node *FindChild(const KeyType &key, KeyLess<KeyType> key_less) const {
     uint16_t index = key_map_.FindLower(key, key_less);
     if (index == 0) {
       return first_child_;
@@ -246,7 +246,7 @@ class LeafNode : public Node {
   LeafNode() : Node(0), prev_(nullptr), next_(nullptr) {}
 
   // 查找key所对应的val，如果不存在就返回false
-  bool FindValue(const KeyType &key, KeyLess<KeyType> key_less, ValueType *val) {
+  bool FindValue(const KeyType &key, KeyLess<KeyType> key_less, ValueType *val) const {
     uint16_t index = key_map_.FindLower(key, key_less);
     if (index >= key_map_.Size()) {
       return false;
