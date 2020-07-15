@@ -131,8 +131,50 @@ TEST(BPlusTreeNodeTest, LeafNodeSplit) {
   }
 }
 
-TEST(BPlusTreeNodeTest, InnerNodeSplit) {
+TEST(BPlusTreeNodeTest, InnerNodeSplitSimple) {
+  const KeyComparator comparator;
+  Key key = "2";
+  InnerNode<Key> node(1, reinterpret_cast<Node *>(1), reinterpret_cast<Node *>(2), key);
+  ASSERT_TRUE(node.Insert("4", reinterpret_cast<Node *>(3), comparator));
 
+  Key split_key;
+  auto sibling = node.Split("3", reinterpret_cast<Node *>(4), comparator, &split_key);
+  EXPECT_EQ(node.size(), 1);
+  EXPECT_EQ(sibling->size(), 1);
+  ASSERT_EQ(split_key, "3");
+  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(2));
+
+  ASSERT_EQ(sibling->FindChild("3", comparator), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(sibling->FindChild("4", comparator), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(sibling->FindChild("5", comparator), reinterpret_cast<Node *>(3));
+  ASSERT_EQ(sibling->FindChild("6", comparator), reinterpret_cast<Node *>(3));
+}
+
+TEST(BPlusTreeNodeTest, InnerNodeSplit) {
+  const KeyComparator comparator;
+  Key key = "100";
+  InnerNode<Key> node(1, reinterpret_cast<Node *>(0), reinterpret_cast<Node *>(100), key);
+  for (int i = 101; i < 199; i++) {
+    ASSERT_TRUE(node.Insert(std::to_string(i), reinterpret_cast<Node *>(i), comparator));
+  }
+
+  Key split_key;
+  auto sibling = node.Split("199", reinterpret_cast<Node *>(199), comparator, &split_key);
+  EXPECT_EQ(node.size(), 49);
+  EXPECT_EQ(sibling->size(), 50);
+  ASSERT_EQ(split_key, "149");
+
+  ASSERT_EQ(node.FindChild("100", comparator), reinterpret_cast<Node *>(0));
+  for (int i = 101; i < 150; i++) {
+    ASSERT_EQ(node.FindChild(std::to_string(i), comparator), reinterpret_cast<Node *>(i - 1));
+  }
+  for (int i = 150; i < 199; i++) {
+    ASSERT_EQ(sibling->FindChild(std::to_string(i), comparator), reinterpret_cast<Node *>(i - 1));
+  }
 }
 
 TEST(BPlusTreeTest, OneNodeBPTree) {

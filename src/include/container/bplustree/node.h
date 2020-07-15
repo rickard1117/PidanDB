@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <iostream>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -182,12 +183,13 @@ class KeyMap {
   // 删除keymap中最后一对key value，并将其返回。
   KeyType pop(ValueType *val) {
     assert(size_ > 0);
-    KeyType target_key = KeyValueAt(size_ -1, val);
+    KeyType target_key = KeyValueAt(size_ - 1, val);
     free_space_start_ -= SIZE_OFFSET + SIZE_SIZE;
     free_space_end_ += target_key.size() + SIZE_VALUE;
     size_--;
     KeyType result;
-    result.copy(target_key);
+    result.resize(target_key.size());
+    std::memcpy(result.data(), target_key.data(), target_key.size());
     return result;
   }
 
@@ -198,8 +200,6 @@ class KeyMap {
 
   // 将一个keymap中右半边数据分裂到另一个keymap中。
   void Split(KeyMap *new_key_map) {
-    // 有3个以上元素才能进行分裂，
-    assert(size_ >= 3);
     assert(new_key_map->size_ == 0);
     assert(new_key_map->free_space_start_ == 0);
     uint16_t split_space_threshold = (SIZE - free_space_end_) / 2;
@@ -211,6 +211,10 @@ class KeyMap {
         break;
       }
     }
+
+    // 如果触发了断言就证明这里的分裂实在没什么意义。。。
+    assert(split_index < size_ - 1);
+
     // 拷贝index，注意split_index指向的索引和数据要留在节点中，不分裂出去。
     uint16_t left_index_size = (split_index + 1) * (SIZE_OFFSET + SIZE_SIZE);
     uint16_t new_index_size = free_space_start_ - left_index_size;
@@ -289,7 +293,7 @@ class InnerNode : public Node {
     // 先将key child插入合适的节点。
     assert(sibling->key_map_.size() > 0);
     bool result = false;
-    if(key_less(key, sibling->key_map_.KeyAt(0))) {
+    if (key_less(key, sibling->key_map_.KeyAt(0))) {
       result = Insert(key, child, key_less);
     } else {
       result = sibling->Insert(key, child, key_less);
@@ -297,8 +301,9 @@ class InnerNode : public Node {
     assert(result);
     assert(key_map_.size() > 0);
     // 删除左边节点的最后一对key和child，将他们分别作为分裂出的新key和右边节点的first_child_指针
-    
-    key_map_.pop(split_key, sibling->first_child_);
+
+    std::cerr << "split key = " << *split_key << '\n';
+    *split_key = key_map_.pop(&sibling->first_child_);
     return sibling;
   }
 
