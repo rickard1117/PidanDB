@@ -87,7 +87,7 @@ class Node {
   void WriteUnlockObsolete() { version_.fetch_add(3); }
 
   // 返回节点中保存key的数量
-  size_t size() const { return size_; }
+  // size_t size() const { return size_; }
 
  private:
   // spin lock，等待node节点解锁。
@@ -107,9 +107,9 @@ class Node {
   uint64_t SetLockedBit(uint64_t version) { return version + 2; }
 
  protected:
-  Node(uint16_t level) : level_(level), size_(0), version_(0b100) {}
+  Node(uint16_t level) : level_(level), version_(0b100) {}
   uint16_t level_;  // 节点所在的level，叶子节点是0, 向上递增。
-  uint16_t size_;   // 节点中存储的key的数量，如果是内部节点的话，child数目是size_ + 1
+  uint16_t padding_;
   std::atomic<uint64_t> version_;  // 用来作为OLC锁的版本号，具体作用可以参阅论文。
 };
 
@@ -182,7 +182,42 @@ class KeyMap {
   // 检查是否还有足够的空间可以插入大小为key_size的key以及一个定长的value
   bool EnoughSpace(size_t key_size) { return FreeSpaceRemaining() >= key_size + SIZE_VALUE + SIZE_OFFSET + SIZE_SIZE; }
 
-  uint16_t Size() const { return size_; }
+  uint16_t size() const { return size_; }
+
+  // 将一个keymap中右半边数据分裂到另一个keymap中。
+  void Split(KeyMap *new_key_map) {
+    // 有3个以上元素才能进行分裂，
+    assert(size_ >= 3);
+    assert(new_key_map->size_ == 0);
+    assert(new_key_map->free_space_start_ == 0);
+    uint16_t split_space_threshold = (SIZE - free_space_end_) / 2;
+    uint16_t split_key_offset, split_key_size, left_data_size = 0, split_index = 0;
+    for (; split_index < size_; split_index++) {
+      ReadIndex(split_index, &split_key_offset, &split_key_size);
+      left_data_size += split_key_size + sizeof(ValueType);
+      if (left_data_size >= split_space_threshold) {
+        break;
+      }
+    }
+    // 拷贝index，注意split_index指向的索引和数据要留在节点中，不分裂出去。
+    uint16_t left_index_size = (split_index + 1) * (SIZE_OFFSET + SIZE_SIZE);
+    uint16_t new_index_size = free_space_start_ - left_index_size;
+    uint16_t new_data_size = SIZE - free_space_end_ - left_data_size;
+    std::memcpy(new_key_map->data_, &data_[left_index_size], new_index_size);
+    new_key_map->free_space_start_ = new_index_size;
+    // 拷贝key value data
+    new_key_map->free_space_end_ -= new_data_size;
+    std::memcpy(&new_key_map->data_[new_key_map->free_space_end_], &data_[free_space_end_], new_data_size);
+    new_key_map->size_ = size_ - split_index - 1;
+    size_ = split_index + 1;
+    free_space_start_ = left_index_size;
+    free_space_end_ += new_data_size;
+
+    // 内存copy完成之后要统一修改new_key_map中所有key的offset
+    for (uint16_t new_index = 0; new_index < new_key_map->size_; new_index++) {
+      *reinterpret_cast<uint16_t *>(&new_key_map->data_[new_index * (SIZE_OFFSET + SIZE_SIZE)]) += left_data_size;
+    }
+  }
 
  private:
   void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
@@ -232,7 +267,7 @@ class InnerNode : public Node {
     return true;
   }
 
-  uint16_t Size() const { return size_; }
+  size_t size() const { return key_map_.size(); }
 
  private:
   // InnerNode中，child指针数目比key多一个，所以用一个额外的指针保存指向最左边孩子节点的指针。
@@ -248,7 +283,7 @@ class LeafNode : public Node {
   // 查找key所对应的val，如果不存在就返回false
   bool FindValue(const KeyType &key, KeyLess<KeyType> key_less, ValueType *val) const {
     uint16_t index = key_map_.FindLower(key, key_less);
-    if (index >= key_map_.Size()) {
+    if (index >= key_map_.size()) {
       return false;
     }
     KeyType result_key = key_map_.KeyValueAt(index, val);
@@ -263,7 +298,7 @@ class LeafNode : public Node {
     }
 
     uint16_t index = key_map_.FindLower(key, key_less);
-    if (index < key_map_.Size() && key_equal(key_less, key_map_.KeyAt(index), key)) {
+    if (index < key_map_.size() && key_equal(key_less, key_map_.KeyAt(index), key)) {
       *not_enough_space = false;
       return false;
     }
@@ -271,10 +306,26 @@ class LeafNode : public Node {
     return true;
   }
 
+  // 将当前节点向右分裂，返回分裂后的新节点
+  LeafNode *Split() {
+    auto sibling = new LeafNode<KeyType, ValueType>();
+    key_map_.Split(&sibling->key_map_);
+    sibling->prev_ = this;
+    sibling->next_ = next_;
+    if (next_ != nullptr) {
+      next_->prev_ = sibling;
+    }
+    next_ = sibling;
+    return sibling;
+  }
+
+  size_t size() const { return key_map_.size(); }
+
  private:
-  Node *prev_;
-  Node *next_;
-  KeyMap<KeyType, ValueType, BPLUSTREE_LEAFNODE_SIZE - POINTER_SIZE * 2> key_map_;
+  static constexpr uint32_t KEY_MAP_SIZE = BPLUSTREE_LEAFNODE_SIZE - POINTER_SIZE * 2;
+  LeafNode *prev_;
+  LeafNode *next_;
+  KeyMap<KeyType, ValueType, KEY_MAP_SIZE> key_map_;
 };
 
 }  // namespace pidan
