@@ -131,6 +131,10 @@ TEST(BPlusTreeNodeTest, LeafNodeSplit) {
   }
 }
 
+TEST(BPlusTreeNodeTest, InnerNodeSplit) {
+
+}
+
 TEST(BPlusTreeTest, OneNodeBPTree) {
   // 测试最简单的场景，B+树中只有一个根节点。
   BPlusTree<Key, Value> tree;

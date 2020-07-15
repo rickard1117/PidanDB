@@ -179,6 +179,18 @@ class KeyMap {
     size_++;
   }
 
+  // 删除keymap中最后一对key value，并将其返回。
+  KeyType pop(ValueType *val) {
+    assert(size_ > 0);
+    KeyType target_key = KeyValueAt(size_ -1, val);
+    free_space_start_ -= SIZE_OFFSET + SIZE_SIZE;
+    free_space_end_ += target_key.size() + SIZE_VALUE;
+    size_--;
+    KeyType result;
+    result.copy(target_key);
+    return result;
+  }
+
   // 检查是否还有足够的空间可以插入大小为key_size的key以及一个定长的value
   bool EnoughSpace(size_t key_size) { return FreeSpaceRemaining() >= key_size + SIZE_VALUE + SIZE_OFFSET + SIZE_SIZE; }
 
@@ -269,7 +281,29 @@ class InnerNode : public Node {
 
   size_t size() const { return key_map_.size(); }
 
+  // 将当前节点向右分裂，分裂完成后将key和child插入到合适的节点中，返回分裂后的新节点。
+  InnerNode *Split(const KeyType &key, Node *child, KeyLess<KeyType> key_less, KeyType *split_key) {
+    auto sibling = new InnerNode<KeyType>(level_);
+    key_map_.Split(&sibling->key_map_);
+    // 到这里只是分裂了keymap, 此时右边节点的first_child_指针没有被设置。
+    // 先将key child插入合适的节点。
+    assert(sibling->key_map_.size() > 0);
+    bool result = false;
+    if(key_less(key, sibling->key_map_.KeyAt(0))) {
+      result = Insert(key, child, key_less);
+    } else {
+      result = sibling->Insert(key, child, key_less);
+    }
+    assert(result);
+    assert(key_map_.size() > 0);
+    // 删除左边节点的最后一对key和child，将他们分别作为分裂出的新key和右边节点的first_child_指针
+    
+    key_map_.pop(split_key, sibling->first_child_);
+    return sibling;
+  }
+
  private:
+  InnerNode(uint16_t level) : Node(level), first_child_(nullptr) {}
   // InnerNode中，child指针数目比key多一个，所以用一个额外的指针保存指向最左边孩子节点的指针。
   Node *first_child_;
   KeyMap<KeyType, Node *, BPLUSTREE_INNERNODE_SIZE - sizeof(Node) - POINTER_SIZE> key_map_;
