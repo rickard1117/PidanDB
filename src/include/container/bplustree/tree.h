@@ -29,17 +29,16 @@ class BPlusTree {
   }
 
   // 插入一对key value，要求key是唯一的。如果key已经存在则返回false，插入成功返回true。
-  bool InsertUnique(const KeyType &key, const ValueType &val) {
-    Node *node = root_.load();
-    if (node->IsLeaf()) {
-      LNode *leaf = static_cast<LNode *>(node);
-      bool need_split = false;
-      if (leaf->InsertUnique(key, key_cmp_obj_, val, &need_split)) {
-        return true;
+  bool InsertUnique(const KeyType &key, const ValueType &value) {
+    for (;;) {
+      Node *node = root_.load();
+      bool need_restart = false;
+      bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
+      if (need_restart) {
+        continue;
       }
-      return false;
+      return result;
     }
-    return false;
   }
 
  private:
@@ -58,13 +57,156 @@ class BPlusTree {
 
   //   bool keyGreaterEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(lhs, rhs); }
 
+  // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
+  bool StartInsertUnique(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
+                         const ValueType &val, bool *need_restart) {
+    uint64_t version;
+    if (!node->ReadLockOrRestart(&version)) {
+      *need_restart = true;
+      return false;
+    }
+
+    if (!node->IsLeaf()) {
+      INode *inner = static_cast<INode *>(node);
+      if (!inner->EnoughSpaceFor(MAX_KEY_SIZE)) {
+        // 节点空间不足，要分裂。
+        if (parent) {
+          if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
+            *need_restart = true;
+            return false;
+          }
+        }
+
+        if (!node->UpgradeToWriteLockOrRestart(version)) {
+          if (parent) {
+            parent->WriteUnlock();
+          }
+          *need_restart = true;
+          return false;
+        }
+
+        // TODO: 这个地方有疑问，到底应不应该判断。
+        if (parent == nullptr && (inner != root_)) {
+          // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
+          // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
+          inner->WriteUnlock();
+          *need_restart = true;
+          return false;
+        }
+
+        Key split_key;
+        INode *sibling = inner->Split(key_cmp_obj_, &split_key);
+        if (parent) {
+          bool result = parent->Insert(split_key, sibling, key_cmp_obj_);
+          assert(result);
+        } else {
+          root_ = new INode(level_ + 1, inner, sibling, split_key);
+        }
+        inner->WriteUnlock();
+        if (parent) {
+          parent->WriteUnlock();
+        }
+        // 分裂完毕，重新开始插入流程。
+        *need_restart = true;
+        return false;
+      }
+
+      if (parent) {
+        if (!parent->ReadUnlockOrRestart(parent_version)) {
+          *need_restart = true;
+          return false;
+        }
+      }
+
+      Node *child = inner->FindChild(key, key_cmp_obj_);
+      if (!inner->CheckOrRestart(version)) {
+        *need_restart = true;
+        return false;
+      }
+      return StartInsertUnique(child, node, version, key, val, need_restart);
+    }
+
+    LNode *leaf = static_cast<LNode *>(node);
+    if (leaf->Exists(key)) {
+      if (!leaf->ReadUnlockOrRestart(version)) {
+        *need_restart = true;
+      } else {
+        *need_restart = false;
+      }
+      return false;
+    }
+
+    if (!leaf->EnoughSpaceFor(MAX_KEY_SIZE)) {
+      if (parent) {
+        // leaf节点要分裂，回向父节点插入key，要先拿到父节点的写锁。
+        // 之前访问父节点已经保证了父节点的空间足够，如果在访问后父节点发生了改动，那么这里会加锁失败。
+        if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
+          *need_restart = true;
+          return false;
+        }
+      }
+
+      if (!leaf->UpgradeToWriteLockOrRestart(version)) {
+        *need_restart = true;
+        if (parent) {
+          parent->WriteUnlock();
+        }
+        return false;
+      }
+
+      // TODO: 这个地方有疑问，到底应不应该判断。
+      if (parent == nullptr && (inner != root_)) {
+        // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
+        // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
+        inner->WriteUnlock();
+        *need_restart = true;
+        return false;
+      }
+
+      Key split_key;
+      LNode *sibling = leaf->Split(&split_key);
+      if (parent) {
+        bool result = parent->Insert(split_key, sibling, key_cmp_obj_);
+        assert(result);
+      } else {
+        root_ = new INode(level_ + 1, leaf, sibling, split_key);
+      }
+      // TODO : 分裂完毕了，此时是否可以直接将key插入到leaf或者sibling节点了，还是需要再重启一次？
+      if (key_cmp_obj_(key, split_key)) {
+        leaf->Insert(key, val, key_cmp_obj_);
+      } else {
+        sibling->Insert(key, val, key_cmp_obj_);
+      }
+      leaf->WriteUnlock();
+      if (parent) {
+        parent->WriteUnlock();
+      }
+      *need_restart = false;
+      return true;
+    } else {
+      // leaf 节点空间足够，直接插入不需要再对父节点加写锁了
+      if (leaf->UpgradeToWriteLockOrRestart(version)) {
+        *need_restart = true;
+        return false;
+      }
+      if (parent) {
+        if (!parent->ReadUnlockOrRestart(parent_version)) {
+          *need_restart = true;
+          return false;
+        }
+      }
+      leaf->Insert(key, key_cmp_obj_, val);
+      leaf->WriteUnlock();
+      return true;
+    }
+  }
+
   // 从节点node开始查找key，没有找到则返回false
   bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
                    ValueType *val, bool *need_restart) const {
     uint64_t version;
 
     if (!node->ReadLockOrRestart(&version)) {
-      std::cerr << "2" << '\n';
       *need_restart = true;
       return false;
     }

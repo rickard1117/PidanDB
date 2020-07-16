@@ -120,7 +120,6 @@ TEST(BPlusTreeNodeTest, LeafNodeSplit) {
 
   for (int i = 100; i <= left_size; i++) {
     std::string key = std::to_string(i);
-    std::cerr << "going to find key : " << key << '\n';
     ASSERT_TRUE(leaf.FindValue(key, comparator, &temp_val));
     ASSERT_EQ(temp_val, i);
   }
