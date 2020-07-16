@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <utility>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -89,6 +90,8 @@ class Node {
   // 返回节点中保存key的数量
   // size_t size() const { return size_; }
 
+  uint16_t level() const { return level_; }
+
  private:
   // spin lock，等待node节点解锁。
   uint64_t AwaitNodeUnlocked() const {
@@ -113,23 +116,15 @@ class Node {
   std::atomic<uint64_t> version_;  // 用来作为OLC锁的版本号，具体作用可以参阅论文。
 };
 
-template <typename KeyType>
-using KeyLess = std::function<bool(const KeyType &key1, const KeyType &key2)>;
-
-template <typename KeyType>
-bool key_equal(KeyLess<KeyType> key_less, const KeyType &key1, const KeyType &key2) {
-  return !key_less(key1, key2) && !key_less(key2, key1);
-}
-
 template <typename KeyType, typename ValueType, uint32_t SIZE>
 class KeyMap {
  public:
   KeyMap() : free_space_start_(0), free_space_end_(SIZE), size_(0) {}
 
   // 在keymap中找到第一个不小于key的下标。下标的最小值为0，最大值为Size()的返回值。
-  uint16_t FindLower(const KeyType &key, KeyLess<KeyType> key_less) const {
+  uint16_t FindLower(const KeyType &key) const {
     uint16_t idx = 0;
-    while (idx < size_ && key_less(KeyAt(idx), key)) {
+    while (idx < size_ && KeyAt(idx) < key) {
       idx++;
     }
     return idx;
@@ -149,12 +144,14 @@ class KeyMap {
     return *reinterpret_cast<const ValueType *>(&data_[key_offset + key_size]);
   }
 
-  KeyType KeyValueAt(uint16_t index, ValueType *val) const {
+  std::pair<KeyType, ValueType> KeyValueAt(uint16_t index) const {
     assert(index < size_);
     uint16_t key_offset, key_size;
     ReadIndex(index, &key_offset, &key_size);
-    *val = *reinterpret_cast<const ValueType *>(&data_[key_offset + key_size]);
-    return KeyType(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
+
+    ValueType val = *reinterpret_cast<const ValueType *>(&data_[key_offset + key_size]);
+    KeyType key(reinterpret_cast<const char *>(&data_[key_offset]), key_size);
+    return std::make_pair(key, val);
   }
 
   // 在下标为index的位置插入key和value
@@ -179,17 +176,15 @@ class KeyMap {
     size_++;
   }
 
-  // 删除keymap中最后一对key value，并将其返回。
-  KeyType pop(ValueType *val) {
+  // 返回keymap中最后一对key value
+  std::pair<KeyType, ValueType> LastKeyValue() const { return KeyValueAt(size_ - 1); }
+
+  // 删除keymap中最后一对key value。
+  void pop() {
     assert(size_ > 0);
-    KeyType target_key = KeyValueAt(size_ - 1, val);
+    uint16_t delete_key_size = KeySizeAt(size_ - 1);
     free_space_start_ -= SIZE_OFFSET + SIZE_SIZE;
-    free_space_end_ += target_key.size() + SIZE_VALUE;
-    size_--;
-    KeyType result;
-    result.resize(target_key.size());
-    std::memcpy(result.data(), target_key.data(), target_key.size());
-    return result;
+    free_space_end_ += delete_key_size + SIZE_VALUE;
   }
 
   // 检查是否还有足够的空间可以插入大小为key_size的key以及一个定长的value
@@ -237,9 +232,16 @@ class KeyMap {
 
  private:
   void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
+    assert(index < size_);
     uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
     *key_offset = *reinterpret_cast<const uint16_t *>(&data_[index_offset]);
     *key_size = *reinterpret_cast<const uint16_t *>(&data_[index_offset + SIZE_OFFSET]);
+  }
+
+  uint16_t KeySizeAt(uint16_t index) const {
+    assert(index < size_);
+    uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
+    return *reinterpret_cast<const uint16_t *>(&data_[index_offset + SIZE_OFFSET]);
   }
 
   uint16_t FreeSpaceRemaining() { return free_space_end_ - free_space_start_; }
@@ -264,8 +266,8 @@ class InnerNode : public Node {
   }
 
   // 根据key来找到对应的child node指针
-  Node *FindChild(const KeyType &key, KeyLess<KeyType> key_less) const {
-    uint16_t index = key_map_.FindLower(key, key_less);
+  Node *FindChild(const KeyType &key) const {
+    uint16_t index = key_map_.FindLower(key);
     if (index == 0) {
       return first_child_;
     }
@@ -274,49 +276,31 @@ class InnerNode : public Node {
   }
 
   // 向节点中插入一个key,成功返回true,没有足够空间则返回false。
-  bool Insert(const KeyType &key, Node *child, KeyLess<KeyType> key_less) {
+  bool Insert(const KeyType &key, Node *child) {
     if (!key_map_.EnoughSpace(key.size())) {
       return false;
     }
-    uint16_t index = key_map_.FindLower(key, key_less);
+    uint16_t index = key_map_.FindLower(key);
     key_map_.InsertKeyValue(index, key, child);
     return true;
   }
 
   size_t size() const { return key_map_.size(); }
 
-  // 将当前节点向右分裂，分裂完成后将key和child插入到合适的节点中，返回分裂后的新节点。
-  InnerNode *Split(const KeyType &key, Node *child, KeyLess<KeyType> key_less, KeyType *split_key) {
-    auto sibling = new InnerNode<KeyType>(level_);
-    key_map_.Split(&sibling->key_map_);
-    // 到这里只是分裂了keymap, 此时右边节点的first_child_指针没有被设置。
-    // 先将key child插入合适的节点。
-    assert(sibling->key_map_.size() > 0);
-    bool result = false;
-    if (key_less(key, sibling->key_map_.KeyAt(0))) {
-      result = Insert(key, child, key_less);
-    } else {
-      result = sibling->Insert(key, child, key_less);
-    }
-    assert(result);
-    assert(key_map_.size() > 0);
-    // 删除左边节点的最后一对key和child，将他们分别作为分裂出的新key和右边节点的first_child_指针
-
-    *split_key = key_map_.pop(&sibling->first_child_);
-    return sibling;
-  }
-
   // 将当前节点直接向右分裂，不插入新的key。用于插入时提前分裂。
-  InnerNode *Split(KeyLess<KeyType> key_less, KeyType *split_key) {
+  // 需要注意split_key并不持有内存，需要注意它的生命周期，调用者必须加合适的锁。
+  InnerNode *Split(KeyType *split_key) {
     auto sibling = new InnerNode<KeyType>(level_);
     key_map_.Split(&sibling->key_map_);
     assert(sibling->key_map_.size() > 0);
-    *split_key = key_map_.pop(&sibling->first_child_);
+    auto kv = key_map_.LastKeyValue();
+    *split_key = kv.first;
+    key_map_.pop();
     return sibling;
   }
 
   // 是否有足够的空间来插入大小为key_size的key
-  bool EnoughSpaceFor(size_t key_size) const { return key_map_.EnoughSpace(key_size); }
+  bool EnoughSpaceFor(size_t key_size) { return key_map_.EnoughSpace(key_size); }
 
  private:
   InnerNode(uint16_t level) : Node(level), first_child_(nullptr) {}
@@ -331,24 +315,28 @@ class LeafNode : public Node {
   LeafNode() : Node(0), prev_(nullptr), next_(nullptr) {}
 
   // 查找key所对应的val，如果不存在就返回false
-  bool FindValue(const KeyType &key, KeyLess<KeyType> key_less, ValueType *val) const {
-    uint16_t index = key_map_.FindLower(key, key_less);
+  bool FindValue(const KeyType &key, ValueType *val) const {
+    uint16_t index = key_map_.FindLower(key);
     if (index >= key_map_.size()) {
       return false;
     }
-    KeyType result_key = key_map_.KeyValueAt(index, val);
-    return key_equal(key_less, result_key, key);
+    auto kv = key_map_.KeyValueAt(index);
+    if (kv.first == key) {
+      *val = kv.second;
+      return true;
+    }
+    return false;
   }
 
   // 插入key value，如果key已经存在，则插入失败。
-  bool InsertUnique(const KeyType &key, KeyLess<KeyType> key_less, const ValueType &val, bool *not_enough_space) {
+  bool InsertUnique(const KeyType &key, const ValueType &val, bool *not_enough_space) {
     if (!key_map_.EnoughSpace(key.size())) {
       *not_enough_space = true;
       return false;
     }
 
-    uint16_t index = key_map_.FindLower(key, key_less);
-    if (index < key_map_.size() && key_equal(key_less, key_map_.KeyAt(index), key)) {
+    uint16_t index = key_map_.FindLower(key);
+    if (index < key_map_.size() && key_map_.KeyAt(index) == key) {
       *not_enough_space = false;
       return false;
     }
@@ -356,10 +344,10 @@ class LeafNode : public Node {
     return true;
   }
 
-  void Insert(const KeyType &key, const ValueType &val, KeyLess<KeyType> key_less) {
+  void Insert(const KeyType &key, const ValueType &val) {
     assert(key_map_.EnoughSpace(key.size()));
     assert(!Exists(key));
-    uint16_t index = key_map_.FindLower(key, key_less);
+    uint16_t index = key_map_.FindLower(key);
     key_map_.InsertKeyValue(index, key, val);
   }
 
@@ -377,28 +365,27 @@ class LeafNode : public Node {
   }
 
   // 将当前节点向右分裂，返回分裂后的新节点和分裂key
+  // 需要注意split_key并不持有内存，需要注意它的生命周期，调用者必须加合适的锁。
   LeafNode *Split(KeyType *split_key) {
     auto sibling = Split();
-    KeyType k = key_map_.KeyAt(key_map_.size_ - 1);
-    split_key->resize(k.size());
-    std::memcpy(split_key->data(), k.data(), k.size());
+    *split_key = key_map_.KeyAt(key_map_.size() - 1);
     return sibling;
   }
 
   size_t size() const { return key_map_.size(); }
 
   // 检查key是否存在于节点当中
-  bool Exists(const KeyType &key, KeyLess<KeyType> key_less) {
-    uint16_t index = key_map_.FindLower(key, key_less);
+  bool Exists(const KeyType &key) {
+    uint16_t index = key_map_.FindLower(key);
     if (index >= key_map_.size()) {
       return false;
     }
     auto k = key_map_.KeyAt(index);
-    return key_equal(key_less, k, key);
+    return k == key;
   }
 
   // 是否有足够的空间来插入大小为key_size的key
-  bool EnoughSpaceFor(size_t key_size) const { return key_map_.EnoughSpace(key_size); }
+  bool EnoughSpaceFor(size_t key_size) { return key_map_.EnoughSpace(key_size); }
 
  private:
   static constexpr uint32_t KEY_MAP_SIZE = BPLUSTREE_LEAFNODE_SIZE - POINTER_SIZE * 2;

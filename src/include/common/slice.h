@@ -15,6 +15,8 @@ class Slice {
 
   Slice(const std::string &s) : data_(s.data()), size_(s.size()) {}
 
+  Slice(const char *s) : data_(s), size_(strlen(s)) {}
+
   Slice(const Slice &) = default;
 
   Slice &operator=(const Slice &) = default;

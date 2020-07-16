@@ -9,10 +9,10 @@
 namespace pidan {
 
 // 支持变长key，定长value，非重复key的线程安全B+树。
-template <typename KeyType, typename ValueType, typename KeyComparator = std::less<KeyType>>
+template <typename KeyType, typename ValueType>
 class BPlusTree {
  public:
-  BPlusTree() : root_(new LNode), key_cmp_obj_(KeyComparator()) {}
+  BPlusTree() : root_(new LNode) {}
 
   // 查找key对应的value，找到返回true，否则返回false。
   bool Lookup(const KeyType &key, ValueType *value) const {
@@ -45,20 +45,8 @@ class BPlusTree {
   using LNode = LeafNode<KeyType, ValueType>;
   using INode = InnerNode<KeyType>;
 
-  //   bool keyEqual(const KeyType &lhs, const KeyType &rhs) const {
-  //     return !key_cmp_obj_(lhs, rhs) && !key_cmp_obj_(rhs, lhs);
-  //   }
-
-  //   bool keyLess(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(lhs, rhs); }
-
-  //   bool keyLessEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(rhs, lhs); }
-
-  //   bool keyGreater(const KeyType &lhs, const KeyType &rhs) const { return key_cmp_obj_(rhs, lhs); }
-
-  //   bool keyGreaterEqual(const KeyType &lhs, const KeyType &rhs) const { return !key_cmp_obj_(lhs, rhs); }
-
   // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
-  bool StartInsertUnique(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
+  bool StartInsertUnique(Node *node, INode *parent, const uint64_t parent_version, const KeyType &key,
                          const ValueType &val, bool *need_restart) {
     uint64_t version;
     if (!node->ReadLockOrRestart(&version)) {
@@ -77,7 +65,7 @@ class BPlusTree {
           }
         }
 
-        if (!node->UpgradeToWriteLockOrRestart(version)) {
+        if (!inner->UpgradeToWriteLockOrRestart(version)) {
           if (parent) {
             parent->WriteUnlock();
           }
@@ -94,13 +82,13 @@ class BPlusTree {
           return false;
         }
 
-        Key split_key;
-        INode *sibling = inner->Split(key_cmp_obj_, &split_key);
+        KeyType split_key;
+        INode *sibling = inner->Split(&split_key);
         if (parent) {
-          bool result = parent->Insert(split_key, sibling, key_cmp_obj_);
+          bool result = parent->Insert(split_key, sibling);
           assert(result);
         } else {
-          root_ = new INode(level_ + 1, inner, sibling, split_key);
+          root_ = new INode(inner->level() + 1, inner, sibling, split_key);
         }
         inner->WriteUnlock();
         if (parent) {
@@ -118,12 +106,12 @@ class BPlusTree {
         }
       }
 
-      Node *child = inner->FindChild(key, key_cmp_obj_);
+      Node *child = inner->FindChild(key);
       if (!inner->CheckOrRestart(version)) {
         *need_restart = true;
         return false;
       }
-      return StartInsertUnique(child, node, version, key, val, need_restart);
+      return StartInsertUnique(child, inner, version, key, val, need_restart);
     }
 
     LNode *leaf = static_cast<LNode *>(node);
@@ -155,27 +143,28 @@ class BPlusTree {
       }
 
       // TODO: 这个地方有疑问，到底应不应该判断。
-      if (parent == nullptr && (inner != root_)) {
+      if (parent == nullptr && (leaf != root_)) {
         // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
         // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
-        inner->WriteUnlock();
+        leaf->WriteUnlock();
         *need_restart = true;
         return false;
       }
 
-      Key split_key;
+      KeyType split_key;
       LNode *sibling = leaf->Split(&split_key);
       if (parent) {
-        bool result = parent->Insert(split_key, sibling, key_cmp_obj_);
+        bool result = parent->Insert(split_key, sibling);
         assert(result);
       } else {
-        root_ = new INode(level_ + 1, leaf, sibling, split_key);
+        // 当前节点是leaf node，那么父节点的level必须是1
+        root_ = new INode(1, leaf, sibling, split_key);
       }
       // TODO : 分裂完毕了，此时是否可以直接将key插入到leaf或者sibling节点了，还是需要再重启一次？
-      if (key_cmp_obj_(key, split_key)) {
-        leaf->Insert(key, val, key_cmp_obj_);
+      if (key < split_key) {
+        leaf->Insert(key, val);
       } else {
-        sibling->Insert(key, val, key_cmp_obj_);
+        sibling->Insert(key, val);
       }
       leaf->WriteUnlock();
       if (parent) {
@@ -195,7 +184,7 @@ class BPlusTree {
           return false;
         }
       }
-      leaf->Insert(key, key_cmp_obj_, val);
+      leaf->Insert(key, val);
       leaf->WriteUnlock();
       return true;
     }
@@ -220,7 +209,7 @@ class BPlusTree {
 
     if (node->IsLeaf()) {
       const LNode *leaf = static_cast<const LNode *>(node);
-      bool result = leaf->FindValue(key, key_cmp_obj_, val);
+      bool result = leaf->FindValue(key, val);
       if (!leaf->ReadUnlockOrRestart(version)) {
         *need_restart = true;
         return false;
@@ -230,7 +219,7 @@ class BPlusTree {
     }
 
     const INode *inner = static_cast<const INode *>(node);
-    const Node *child = inner->FindChild(key, key_cmp_obj_);
+    const Node *child = inner->FindChild(key);
     assert(child != nullptr);
     // 这里需要再次检查，以保证child指针的有效性。
     if (!inner->CheckOrRestart(version)) {
@@ -242,7 +231,6 @@ class BPlusTree {
 
  private:
   std::atomic<Node *> root_;
-  const KeyComparator key_cmp_obj_;
-  // const ValueEqualityChecker val_eq_obj_;
+  // const KeyComparator key_cmp_obj_;
 };
 }  // namespace pidan

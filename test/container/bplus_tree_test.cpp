@@ -2,83 +2,81 @@
 
 #include <string>
 
+#include "common/slice.h"
 #include "container/bplustree/node.h"
 #include "container/bplustree/tree.h"
 
 namespace pidan {
 
-using Key = std::string;
+using Key = Slice;
 using Value = uint64_t;
 using KeyComparator = std::less<Key>;
 
 TEST(BPlusTreeNodeTest, InnerNodeInsertAndFind) {
-  const KeyComparator comparator;
   Key key = "2";
   InnerNode<Key> node(1, reinterpret_cast<Node *>(1), reinterpret_cast<Node *>(2), key);
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
 
-  ASSERT_TRUE(node.Insert("4", reinterpret_cast<Node *>(3), comparator));
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(3));
+  ASSERT_TRUE(node.Insert("4", reinterpret_cast<Node *>(3)));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("5"), reinterpret_cast<Node *>(3));
 
-  ASSERT_TRUE(node.Insert("3", reinterpret_cast<Node *>(4), comparator));
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(4));
-  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(3));
+  ASSERT_TRUE(node.Insert("3", reinterpret_cast<Node *>(4)));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4"), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(node.FindChild("5"), reinterpret_cast<Node *>(3));
 
-  ASSERT_TRUE(node.Insert("1", reinterpret_cast<Node *>(5), comparator));
-  ASSERT_EQ(node.FindChild("0", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(5));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(4));
-  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(3));
+  ASSERT_TRUE(node.Insert("1", reinterpret_cast<Node *>(5)));
+  ASSERT_EQ(node.FindChild("0"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2"), reinterpret_cast<Node *>(5));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4"), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(node.FindChild("5"), reinterpret_cast<Node *>(3));
 
-  ASSERT_TRUE(node.Insert("5", reinterpret_cast<Node *>(6), comparator));
-  ASSERT_EQ(node.FindChild("0", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(5));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(4));
-  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(3));
-  ASSERT_EQ(node.FindChild("6", comparator), reinterpret_cast<Node *>(6));
+  ASSERT_TRUE(node.Insert("5", reinterpret_cast<Node *>(6)));
+  ASSERT_EQ(node.FindChild("0"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2"), reinterpret_cast<Node *>(5));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4"), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(node.FindChild("5"), reinterpret_cast<Node *>(3));
+  ASSERT_EQ(node.FindChild("6"), reinterpret_cast<Node *>(6));
 }
 
 TEST(BPlusTreeNodeTest, LeafNodeInsertAndFind) {
-  const KeyComparator comparator;
   LeafNode<Key, Value> node;
   Value val = 0;
   bool not_enough_space = false;
-  ASSERT_FALSE(node.FindValue("1", comparator, &val));
+  ASSERT_FALSE(node.FindValue("1", &val));
 
-  ASSERT_TRUE(node.InsertUnique("1", comparator, 1, &not_enough_space));
-  ASSERT_TRUE(node.FindValue("1", comparator, &val));
+  ASSERT_TRUE(node.InsertUnique("1", 1, &not_enough_space));
+  ASSERT_TRUE(node.FindValue("1", &val));
   ASSERT_EQ(val, 1);
   ASSERT_FALSE(not_enough_space);
 
-  ASSERT_FALSE(node.InsertUnique("1", comparator, 1, &not_enough_space));
+  ASSERT_FALSE(node.InsertUnique("1", 1, &not_enough_space));
   ASSERT_FALSE(not_enough_space);
 
-  ASSERT_TRUE(node.InsertUnique("2", comparator, 2, &not_enough_space));
-  ASSERT_TRUE(node.FindValue("2", comparator, &val));
+  ASSERT_TRUE(node.InsertUnique("2", 2, &not_enough_space));
+  ASSERT_TRUE(node.FindValue("2", &val));
   ASSERT_EQ(val, 2);
   ASSERT_FALSE(not_enough_space);
 }
 
 TEST(BPlusTreeNodeTest, LeafNodeSplitSimple) {
-  const KeyComparator comparator;
   LeafNode<Key, Value> leaf;
 
   bool not_enough_space = false;
-  ASSERT_TRUE(leaf.InsertUnique("1", comparator, 1, &not_enough_space));
-  ASSERT_TRUE(leaf.InsertUnique("2", comparator, 2, &not_enough_space));
-  ASSERT_TRUE(leaf.InsertUnique("3", comparator, 3, &not_enough_space));
+  ASSERT_TRUE(leaf.InsertUnique("1", 1, &not_enough_space));
+  ASSERT_TRUE(leaf.InsertUnique("2", 2, &not_enough_space));
+  ASSERT_TRUE(leaf.InsertUnique("3", 3, &not_enough_space));
 
   LeafNode<Key, Value> *sibling = leaf.Split();
   // 1和2留在原来的节点中，3被分裂出去。
@@ -86,28 +84,27 @@ TEST(BPlusTreeNodeTest, LeafNodeSplitSimple) {
   ASSERT_EQ(sibling->size(), 1);
 
   Value temp_val = 0;
-  ASSERT_TRUE(leaf.FindValue("1", comparator, &temp_val));
+  ASSERT_TRUE(leaf.FindValue("1", &temp_val));
   ASSERT_EQ(temp_val, 1);
 
-  ASSERT_TRUE(leaf.FindValue("2", comparator, &temp_val));
+  ASSERT_TRUE(leaf.FindValue("2", &temp_val));
   ASSERT_EQ(temp_val, 2);
 
-  ASSERT_FALSE(leaf.FindValue("3", comparator, &temp_val));
+  ASSERT_FALSE(leaf.FindValue("3", &temp_val));
 
-  ASSERT_TRUE(sibling->FindValue("3", comparator, &temp_val));
+  ASSERT_TRUE(sibling->FindValue("3", &temp_val));
   ASSERT_EQ(temp_val, 3);
 }
 
 TEST(BPlusTreeNodeTest, LeafNodeSplit) {
-  const KeyComparator comparator;
   LeafNode<Key, Value> leaf;
 
   bool not_enough_space = false;
   Value temp_val = 0;
   for (int i = 100; i <= 299; i++) {
     std::string key = std::to_string(i);
-    ASSERT_TRUE(leaf.InsertUnique(key, comparator, i, &not_enough_space));
-    ASSERT_TRUE(leaf.FindValue(key, comparator, &temp_val));
+    ASSERT_TRUE(leaf.InsertUnique(key, i, &not_enough_space));
+    ASSERT_TRUE(leaf.FindValue(key, &temp_val));
     ASSERT_EQ(temp_val, i);
   }
 
@@ -120,59 +117,57 @@ TEST(BPlusTreeNodeTest, LeafNodeSplit) {
 
   for (int i = 100; i <= left_size; i++) {
     std::string key = std::to_string(i);
-    ASSERT_TRUE(leaf.FindValue(key, comparator, &temp_val));
+    ASSERT_TRUE(leaf.FindValue(key, &temp_val));
     ASSERT_EQ(temp_val, i);
   }
   for (int i = 100 + left_size + 1; i <= 299; i++) {
     std::string key = std::to_string(i);
-    ASSERT_TRUE(sibling->FindValue(key, comparator, &temp_val));
+    ASSERT_TRUE(sibling->FindValue(key, &temp_val));
     ASSERT_EQ(temp_val, i);
   }
 }
 
 TEST(BPlusTreeNodeTest, InnerNodeSplitSimple) {
-  const KeyComparator comparator;
   Key key = "2";
   InnerNode<Key> node(1, reinterpret_cast<Node *>(1), reinterpret_cast<Node *>(2), key);
-  ASSERT_TRUE(node.Insert("4", reinterpret_cast<Node *>(3), comparator));
-
+  ASSERT_TRUE(node.Insert("4", reinterpret_cast<Node *>(3)));
+  ASSERT_TRUE(node.Insert("3", reinterpret_cast<Node *>(4)));
   Key split_key;
-  auto sibling = node.Split("3", reinterpret_cast<Node *>(4), comparator, &split_key);
+  auto sibling = node.Split(&split_key);
   EXPECT_EQ(node.size(), 1);
   EXPECT_EQ(sibling->size(), 1);
   ASSERT_EQ(split_key, "3");
-  ASSERT_EQ(node.FindChild("1", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("2", comparator), reinterpret_cast<Node *>(1));
-  ASSERT_EQ(node.FindChild("3", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("4", comparator), reinterpret_cast<Node *>(2));
-  ASSERT_EQ(node.FindChild("5", comparator), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("1"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("2"), reinterpret_cast<Node *>(1));
+  ASSERT_EQ(node.FindChild("3"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("4"), reinterpret_cast<Node *>(2));
+  ASSERT_EQ(node.FindChild("5"), reinterpret_cast<Node *>(2));
 
-  ASSERT_EQ(sibling->FindChild("3", comparator), reinterpret_cast<Node *>(4));
-  ASSERT_EQ(sibling->FindChild("4", comparator), reinterpret_cast<Node *>(4));
-  ASSERT_EQ(sibling->FindChild("5", comparator), reinterpret_cast<Node *>(3));
-  ASSERT_EQ(sibling->FindChild("6", comparator), reinterpret_cast<Node *>(3));
+  ASSERT_EQ(sibling->FindChild("3"), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(sibling->FindChild("4"), reinterpret_cast<Node *>(4));
+  ASSERT_EQ(sibling->FindChild("5"), reinterpret_cast<Node *>(3));
+  ASSERT_EQ(sibling->FindChild("6"), reinterpret_cast<Node *>(3));
 }
 
 TEST(BPlusTreeNodeTest, InnerNodeSplit) {
-  const KeyComparator comparator;
   Key key = "100";
   InnerNode<Key> node(1, reinterpret_cast<Node *>(0), reinterpret_cast<Node *>(100), key);
-  for (int i = 101; i < 199; i++) {
-    ASSERT_TRUE(node.Insert(std::to_string(i), reinterpret_cast<Node *>(i), comparator));
+  for (int i = 101; i <= 199; i++) {
+    ASSERT_TRUE(node.Insert(std::to_string(i), reinterpret_cast<Node *>(i)));
   }
 
   Key split_key;
-  auto sibling = node.Split("199", reinterpret_cast<Node *>(199), comparator, &split_key);
+  auto sibling = node.Split(&split_key);
   EXPECT_EQ(node.size(), 49);
   EXPECT_EQ(sibling->size(), 50);
   ASSERT_EQ(split_key, "149");
 
-  ASSERT_EQ(node.FindChild("100", comparator), reinterpret_cast<Node *>(0));
+  ASSERT_EQ(node.FindChild("100"), reinterpret_cast<Node *>(0));
   for (int i = 101; i < 150; i++) {
-    ASSERT_EQ(node.FindChild(std::to_string(i), comparator), reinterpret_cast<Node *>(i - 1));
+    ASSERT_EQ(node.FindChild(std::to_string(i)), reinterpret_cast<Node *>(i - 1));
   }
   for (int i = 150; i < 199; i++) {
-    ASSERT_EQ(sibling->FindChild(std::to_string(i), comparator), reinterpret_cast<Node *>(i - 1));
+    ASSERT_EQ(sibling->FindChild(std::to_string(i)), reinterpret_cast<Node *>(i - 1));
   }
 }
 
