@@ -361,7 +361,6 @@ class LeafNode : public Node {
     assert(!Exists(key));
     uint16_t index = key_map_.FindLower(key, key_less);
     key_map_.InsertKeyValue(index, key, val);
-    return true;
   }
 
   // 将当前节点向右分裂，返回分裂后的新节点
