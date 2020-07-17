@@ -176,29 +176,18 @@ class KeyMap {
     size_++;
   }
 
-  // 返回keymap中最后一对key value
-  std::pair<KeyType, ValueType> LastKeyValue() const { return KeyValueAt(size_ - 1); }
-
-  // 删除keymap中最后一对key value。
-  void pop() {
-    assert(size_ > 0);
-    uint16_t delete_key_size = KeySizeAt(size_ - 1);
-    free_space_start_ -= SIZE_OFFSET + SIZE_SIZE;
-    free_space_end_ += delete_key_size + SIZE_VALUE;
-  }
-
   // 检查是否还有足够的空间可以插入大小为key_size的key以及一个定长的value
   bool EnoughSpace(size_t key_size) { return FreeSpaceRemaining() >= key_size + SIZE_VALUE + SIZE_OFFSET + SIZE_SIZE; }
 
   uint16_t size() const { return size_; }
 
-  // 将一个keymap中右半边数据分裂到另一个keymap中。
   void Split(KeyMap *new_key_map) {
     assert(new_key_map->size_ == 0);
     assert(new_key_map->free_space_start_ == 0);
     assert(size_ >= 2);
     uint16_t split_space_threshold = (SIZE - free_space_end_) / 2;
     uint16_t split_key_offset, split_key_size, left_data_size = 0, split_index = 0;
+    // 分裂步骤1： 先从索引中定位到要分裂的点
     for (; split_index < size_; split_index++) {
       ReadIndex(split_index, &split_key_offset, &split_key_size);
       left_data_size += split_key_size + sizeof(ValueType);
@@ -209,28 +198,69 @@ class KeyMap {
 
     // 如果触发了断言就证明这里的分裂实在没什么意义。。。
     assert(split_index < size_ - 1);
+    // 分裂步骤2：将整个keymap拷贝到另一个新的keymap中。清空当前的keymap
+    auto temp_key_map = *this;
+    assert(temp_key_map.size_ == size_);
+    clear();
+    // 分裂步骤3：遍历新keymap，将key逐个插入到当前keymap和分裂keymap中
+    for (uint16_t i = 0; i <= split_index; i++) {
+      auto kv = temp_key_map.KeyValueAt(i);
+      InsertKeyValue(i, kv.first, kv.second);
+    }
 
-    // 拷贝index，注意split_index指向的索引和数据要留在节点中，不分裂出去。
-    uint16_t left_index_size = (split_index + 1) * (SIZE_OFFSET + SIZE_SIZE);
-    uint16_t new_index_size = free_space_start_ - left_index_size;
-    uint16_t new_data_size = SIZE - free_space_end_ - left_data_size;
-    std::memcpy(new_key_map->data_, &data_[left_index_size], new_index_size);
-    new_key_map->free_space_start_ = new_index_size;
-    // 拷贝key value data
-    new_key_map->free_space_end_ -= new_data_size;
-    std::memcpy(&new_key_map->data_[new_key_map->free_space_end_], &data_[free_space_end_], new_data_size);
-    new_key_map->size_ = size_ - split_index - 1;
-    size_ = split_index + 1;
-    free_space_start_ = left_index_size;
-    free_space_end_ += new_data_size;
-
-    // 内存copy完成之后要统一修改new_key_map中所有key的offset
-    for (uint16_t new_index = 0; new_index < new_key_map->size_; new_index++) {
-      *reinterpret_cast<uint16_t *>(&new_key_map->data_[new_index * (SIZE_OFFSET + SIZE_SIZE)]) += left_data_size;
+    for (uint16_t i = split_index + 1; i < temp_key_map.size_; i++) {
+      auto kv = temp_key_map.KeyValueAt(i);
+      new_key_map->InsertKeyValue(i - (split_index + 1), kv.first, kv.second);
     }
   }
 
+  // 将一个keymap中右半边数据分裂到另一个keymap中，并产生分裂key
+  std::pair<KeyType, ValueType> SplitWithKey(KeyMap *new_key_map) {
+    Split(new_key_map);
+    auto result = KeyValueAt(size_ - 1);
+    free_space_start_ -= SIZE_OFFSET + SIZE_SIZE;
+    free_space_end_ += result.first.size() + SIZE_VALUE;
+    size_--;
+    return result;
+
+    //   for (uint16_t i = split_index + 1; split_index < size_; i++) {
+    //     uint16_t offset, key_size ReadIndex(&key_offset, &key_size);
+    //     new_key_map->InsertKeyValue()
+    //   }
+
+    // uint16_t left_index_size = (split_index + 1) * (SIZE_OFFSET + SIZE_SIZE);
+    // uint16_t new_index_size = free_space_start_ - left_index_size;
+    // uint16_t new_data_size = SIZE - free_space_end_ - left_data_size;
+    // std::memcpy(new_key_map->data_, &data_[left_index_size], new_index_size);
+
+    // // 拷贝key value data
+    // for (uint16_t i = split_index + 1; i < size_; i++) {
+    //   uint16_t ReadIndex(i, );
+    //   std::memcpy(&new_key_map->data_[new_key_map->free_space_end_], );
+    // }
+
+    // new_key_map->free_space_start_ = new_index_size;
+
+    // new_key_map->free_space_end_ -= new_data_size;
+    // std::memcpy(&new_key_map->data_[new_key_map->free_space_end_], &data_[free_space_end_], new_data_size);
+    // new_key_map->size_ = size_ - split_index - 1;
+    // size_ = split_index + 1;
+    // free_space_start_ = left_index_size;
+    // free_space_end_ += new_data_size;
+
+    // // 内存copy完成之后要统一修改new_key_map中所有key的offset
+    // for (uint16_t new_index = 0; new_index < new_key_map->size_; new_index++) {
+    //   *reinterpret_cast<uint16_t *>(&new_key_map->data_[new_index * (SIZE_OFFSET + SIZE_SIZE)]) += left_data_size;
+    // }
+  }
+
  private:
+  void clear() {
+    free_space_start_ = 0;
+    free_space_end_ = SIZE;
+    size_ = 0;
+  }
+
   void ReadIndex(uint16_t index, uint16_t *key_offset, uint16_t *key_size) const {
     assert(index < size_);
     uint16_t index_offset = index * (SIZE_OFFSET + SIZE_SIZE);
@@ -249,7 +279,6 @@ class KeyMap {
   static constexpr uint16_t SIZE_OFFSET = 2;
   static constexpr uint16_t SIZE_SIZE = 2;
   static constexpr uint16_t SIZE_VALUE = sizeof(ValueType);
-
   uint16_t free_space_start_;  // header的结束位置，也是freespace的起始位置，这里只是为了方便计算free
                                // space大小，没有其他作用。
   uint16_t free_space_end_;  // free space的结束位置，从这里进行插入
@@ -291,11 +320,11 @@ class InnerNode : public Node {
   // 需要注意split_key并不持有内存，需要注意它的生命周期，调用者必须加合适的锁。
   InnerNode *Split(KeyType *split_key) {
     auto sibling = new InnerNode<KeyType>(level_);
-    key_map_.Split(&sibling->key_map_);
+    auto kv = key_map_.SplitWithKey(&sibling->key_map_);
     assert(sibling->key_map_.size() > 0);
-    auto kv = key_map_.LastKeyValue();
     *split_key = kv.first;
-    key_map_.pop();
+    sibling->first_child_ = kv.second;
+
     return sibling;
   }
 

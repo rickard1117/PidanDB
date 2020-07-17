@@ -32,6 +32,8 @@ class Slice {
     size_ = 0;
   }
 
+  std::string ToString() const { return std::string(data_, size_); }
+
  private:
   const char *data_;
   size_t size_;
@@ -41,14 +43,14 @@ inline bool operator<(const Slice &x, const Slice &y) {
   const size_t min_len = (x.size() < y.size()) ? x.size() : y.size();
   int r = std::memcmp(x.data(), y.data(), min_len);
   if (r != 0) {
-    return r;
+    return r < 0;
   }
-
-  if (x.size() < y.size()) {
-    return -1;
-  } else {
-    return 1;
-  }
+  return x.size() < y.size();
+  // if (x.size() < y.size()) {
+  //   return -1;
+  // } else {
+  //   return 1;
+  // }
 }
 
 inline bool operator>(const Slice &x, const Slice &y) { return y < x; }

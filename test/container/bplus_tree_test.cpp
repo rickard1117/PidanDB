@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <iterator>
+#include <random>
 #include <string>
 
 #include "common/slice.h"
@@ -11,6 +14,32 @@ namespace pidan {
 using Key = Slice;
 using Value = uint64_t;
 using KeyComparator = std::less<Key>;
+
+TEST(BPlusTreeKeyMapTest, KeyMapSplit) {
+  KeyMap<Key, Value, 4096> key_map;
+  key_map.InsertKeyValue(key_map.FindLower("2"), "2", 2);
+  key_map.InsertKeyValue(key_map.FindLower("4"), "4", 4);
+  key_map.InsertKeyValue(key_map.FindLower("3"), "3", 3);
+  ASSERT_EQ(key_map.KeyAt(0), "2");
+  ASSERT_EQ(key_map.KeyAt(1), "3");
+  ASSERT_EQ(key_map.KeyAt(2), "4");
+  ASSERT_EQ(key_map.ValueAt(0), 2);
+  ASSERT_EQ(key_map.ValueAt(1), 3);
+  ASSERT_EQ(key_map.ValueAt(2), 4);
+
+  KeyMap<Key, Value, 4096> new_key_map;
+  auto kv = key_map.SplitWithKey(&new_key_map);
+  ASSERT_EQ(kv.first, "3");
+  ASSERT_EQ(kv.second, 3);
+
+  ASSERT_EQ(key_map.size(), 1);
+  ASSERT_EQ(new_key_map.size(), 1);
+  ASSERT_EQ(key_map.KeyAt(0), "2");
+  ASSERT_EQ(key_map.ValueAt(0), 2);
+
+  ASSERT_EQ(new_key_map.KeyAt(0), "4");
+  ASSERT_EQ(new_key_map.ValueAt(0), 4);
+}
 
 TEST(BPlusTreeNodeTest, InnerNodeInsertAndFind) {
   Key key = "2";
@@ -55,7 +84,6 @@ TEST(BPlusTreeNodeTest, LeafNodeInsertAndFind) {
   Value val = 0;
   bool not_enough_space = false;
   ASSERT_FALSE(node.FindValue("1", &val));
-
   ASSERT_TRUE(node.InsertUnique("1", 1, &not_enough_space));
   ASSERT_TRUE(node.FindValue("1", &val));
   ASSERT_EQ(val, 1);
@@ -152,8 +180,18 @@ TEST(BPlusTreeNodeTest, InnerNodeSplitSimple) {
 TEST(BPlusTreeNodeTest, InnerNodeSplit) {
   Key key = "100";
   InnerNode<Key> node(1, reinterpret_cast<Node *>(0), reinterpret_cast<Node *>(100), key);
+
+  std::vector<int> keys;
   for (int i = 101; i <= 199; i++) {
-    ASSERT_TRUE(node.Insert(std::to_string(i), reinterpret_cast<Node *>(i)));
+    keys.push_back(i);
+  }
+  std::random_device rd;
+  std::mt19937 g(rd());
+
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  for (auto key : keys) {
+    ASSERT_TRUE(node.Insert(std::to_string(key), reinterpret_cast<Node *>(key)));
   }
 
   Key split_key;
@@ -166,6 +204,7 @@ TEST(BPlusTreeNodeTest, InnerNodeSplit) {
   for (int i = 101; i < 150; i++) {
     ASSERT_EQ(node.FindChild(std::to_string(i)), reinterpret_cast<Node *>(i - 1));
   }
+  ASSERT_EQ(node.FindChild(std::to_string(150)), reinterpret_cast<Node *>(148));
   for (int i = 150; i < 199; i++) {
     ASSERT_EQ(sibling->FindChild(std::to_string(i)), reinterpret_cast<Node *>(i - 1));
   }
