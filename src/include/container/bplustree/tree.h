@@ -1,7 +1,7 @@
 #pragma once
 
+#include <fstream>
 #include <functional>
-#include <iostream>
 
 #include "common/macros.h"
 #include "common/type.h"
@@ -36,23 +36,80 @@ class BPlusTree {
       bool need_restart = false;
       bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
       if (need_restart) {
-        std::cerr<< "need restart" << '\n';
         continue;
       }
       return result;
     }
   }
 
+  // 只是测试用
+  void DrawTreeDot(const std::string &filename) {
+    std::ofstream out(filename);
+    out << "digraph g { " << '\n';
+    out << "node [shape = record,height=0.1];" << '\n';
+    IDGenerator g;
+    draw_node(root_, out, g.gen(), g);
+    out << "}" << '\n';
+  }
+
  private:
   using LNode = LeafNode<KeyType, ValueType>;
   using INode = InnerNode<KeyType>;
+
+  class IDGenerator {
+   public:
+    IDGenerator() : id_(0) {}
+    size_t gen() { return id_++; }
+
+   private:
+    size_t id_;
+  };
+
+  void draw_node(Node *node, std::ofstream &ofs, size_t my_id, IDGenerator &g) {
+    std::string my_id_s = std::to_string(my_id);
+    ofs.flush();
+    if (!node->IsLeaf()) {
+      INode *inner = static_cast<INode *>(node);
+      ofs << "node" << my_id_s << "[label = \"";
+      for (uint16_t i = 0; i < inner->key_map_.size(); i++) {
+        ofs << "<f" << std::to_string(i) << ">";
+        ofs << "|" << inner->key_map_.KeyAt(i).ToString() << "|";
+      }
+      ofs << "<f" << inner->key_map_.size() << ">\"];\n";
+
+      size_t childid = g.gen();
+      ofs << "\"node" << my_id_s << "\""
+          << ":f"
+          << "0"
+          << "->"
+          << "\"node" << std::to_string(childid) << "\"\n";
+      draw_node(inner->first_child_, ofs, childid, g);
+
+      for (uint16_t i = 0; i < inner->key_map_.size(); i++) {
+        childid = g.gen();
+        ofs << "\"node" << my_id_s << "\""
+            << ":f" << std::to_string(i + 1) << "->"
+            << "\"node" << std::to_string(childid) << "\"\n";
+        draw_node(inner->key_map_.ValueAt(i), ofs, childid, g);
+      }
+      return;
+    }
+
+    LNode *leaf = static_cast<LNode *>(node);
+    for (uint16_t i = 0; i < leaf->key_map_.size(); i++) {
+      if (i > 0) {
+        ofs << "|";
+      }
+      ofs << leaf->key_map_.KeyAt(i).ToString();
+    }
+    ofs << "\"];\n";
+  }
 
   // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
   bool StartInsertUnique(Node *node, INode *parent, const uint64_t parent_version, const KeyType &key,
                          const ValueType &val, bool *need_restart) {
     uint64_t version;
     if (!node->ReadLockOrRestart(&version)) {
-      std::cerr << __LINE__ << '\n';
       *need_restart = true;
       return false;
     }
@@ -63,7 +120,6 @@ class BPlusTree {
         // 节点空间不足，要分裂。
         if (parent) {
           if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
-            std::cerr << __LINE__ << '\n';
             *need_restart = true;
             return false;
           }
@@ -73,7 +129,6 @@ class BPlusTree {
           if (parent) {
             parent->WriteUnlock();
           }
-          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -83,7 +138,6 @@ class BPlusTree {
           // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
           // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
           inner->WriteUnlock();
-          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -101,14 +155,12 @@ class BPlusTree {
           parent->WriteUnlock();
         }
         // 分裂完毕，重新开始插入流程。
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
 
       if (parent) {
         if (!parent->ReadUnlockOrRestart(parent_version)) {
-          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -116,7 +168,6 @@ class BPlusTree {
 
       Node *child = inner->FindChild(key);
       if (!inner->CheckOrRestart(version)) {
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
@@ -126,7 +177,6 @@ class BPlusTree {
     LNode *leaf = static_cast<LNode *>(node);
     if (leaf->Exists(key)) {
       if (!leaf->ReadUnlockOrRestart(version)) {
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
       } else {
         *need_restart = false;
@@ -139,14 +189,12 @@ class BPlusTree {
         // leaf节点要分裂，回向父节点插入key，要先拿到父节点的写锁。
         // 之前访问父节点已经保证了父节点的空间足够，如果在访问后父节点发生了改动，那么这里会加锁失败。
         if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
-          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
       }
 
       if (!leaf->UpgradeToWriteLockOrRestart(version)) {
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         if (parent) {
           parent->WriteUnlock();
@@ -159,7 +207,6 @@ class BPlusTree {
         // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
         // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
         leaf->WriteUnlock();
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
@@ -188,13 +235,11 @@ class BPlusTree {
     } else {
       // leaf 节点空间足够，直接插入不需要再对父节点加写锁了
       if (!leaf->UpgradeToWriteLockOrRestart(version)) {
-        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
       if (parent) {
         if (!parent->ReadUnlockOrRestart(parent_version)) {
-          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -248,4 +293,8 @@ class BPlusTree {
   std::atomic<Node *> root_;
   // const KeyComparator key_cmp_obj_;
 };
+
+// 画出树的dot图，仅用于测试
+void DrawTreeDot(const std::string &filename);
+
 }  // namespace pidan

@@ -46,11 +46,6 @@ inline bool operator<(const Slice &x, const Slice &y) {
     return r < 0;
   }
   return x.size() < y.size();
-  // if (x.size() < y.size()) {
-  //   return -1;
-  // } else {
-  //   return 1;
-  // }
 }
 
 inline bool operator>(const Slice &x, const Slice &y) { return y < x; }

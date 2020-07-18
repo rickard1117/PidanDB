@@ -5,8 +5,8 @@
 #include <iterator>
 #include <map>
 #include <random>
-#include <string>
 #include <set>
+#include <string>
 
 #include "common/slice.h"
 #include "container/bplustree/node.h"
@@ -236,13 +236,12 @@ TEST(BPlusTreeNodeTest, InnerNodeNotEnoughSpace) {
   ASSERT_EQ(keys.size() - 1, node.size() + sibling->size());
 }
 
-TEST(BPlusTreeTest, OneNodeTree) {
-  // 测试最简单的场景，B+树中只有一个根节点。
+TEST(BPlusTreeTest, RandomInteger) {
   BPlusTree<Key, Value> tree;
   Value temp_val;
 
   std::vector<int> keys;
-  for (int i = 101; i <= 199; i++) {
+  for (int i = 0; i <= 99999; i++) {
     keys.push_back(i);
   }
   std::random_device rd;
@@ -259,22 +258,30 @@ TEST(BPlusTreeTest, OneNodeTree) {
   }
 }
 
-TEST(BPlusTreeTest, RandomInsertAndLookupTree) {
-  std::set<std::string, uint64_t> kvs;
-  BPlusTree<Key, Value> tree;
-  Value temp_val;
-  std::set<std::string> keys;
-  for (int i = 0; i < 1024; i++) {
-    std::cerr << "loop : " << i << '\n';
-    std::string k = ::pidan::test::GenRandomString(8, 1024);
-    if (keys.find(k) != keys.end()) {
-      std::cerr << "repeat key : " << k << '\n';
-    }
-    ASSERT_FALSE(tree.Lookup(k, &temp_val));
-    ASSERT_TRUE(tree.InsertUnique(k, i));
-    ASSERT_TRUE(tree.Lookup(k, &temp_val));
-    ASSERT_EQ(temp_val, i);
-  }
-}
+// TEST(BPlusTreeTest, RandomString) {
+//   std::set<std::string> kvs;
+//   BPlusTree<Key, Value> tree;
+//   Value temp_val;
+
+//   // std::set<std::string> keys;
+//   for (int i = 0; i < 1024; i++) {
+//   // for (int i = 1000; i < 3000; i++) {
+//     // std::cerr << "loop : " << i << '\n';
+//     std::string k = ::pidan::test::GenRandomString(8, 128);
+//     if (kvs.find(k) != kvs.end()) {
+//       std::cerr << "fuck !" << '\n';
+//     } else {
+//       kvs.insert(k);
+//     }
+//     // std::string k = std::to_string(i);
+//     if (!tree.Lookup(k, &temp_val)) {
+//       tree.DrawTreeDot("RandomInsertAndLookupTree.dot");
+//     }
+//     ASSERT_FALSE(tree.Lookup(k, &temp_val));
+//     ASSERT_TRUE(tree.InsertUnique(k, i));
+//     ASSERT_TRUE(tree.Lookup(k, &temp_val));
+//     ASSERT_EQ(temp_val, i);
+//   }
+// }
 
 }  // namespace pidan

@@ -332,6 +332,8 @@ class InnerNode : public Node {
   bool EnoughSpaceFor(size_t key_size) { return key_map_.EnoughSpace(key_size); }
 
  private:
+  template <typename T1, typename T2>
+  friend class BPlusTree;
   InnerNode(uint16_t level) : Node(level), first_child_(nullptr) {}
   // InnerNode中，child指针数目比key多一个，所以用一个额外的指针保存指向最左边孩子节点的指针。
   Node *first_child_;
@@ -417,6 +419,9 @@ class LeafNode : public Node {
   bool EnoughSpaceFor(size_t key_size) { return key_map_.EnoughSpace(key_size); }
 
  private:
+  template <typename T1, typename T2>
+  friend class BPlusTree;
+
   static constexpr uint32_t KEY_MAP_SIZE = BPLUSTREE_LEAFNODE_SIZE - POINTER_SIZE * 2;
   LeafNode *prev_;
   LeafNode *next_;
