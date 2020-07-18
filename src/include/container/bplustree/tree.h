@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <iostream>
 
 #include "common/macros.h"
 #include "common/type.h"
@@ -35,6 +36,7 @@ class BPlusTree {
       bool need_restart = false;
       bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
       if (need_restart) {
+        std::cerr<< "need restart" << '\n';
         continue;
       }
       return result;
@@ -50,6 +52,7 @@ class BPlusTree {
                          const ValueType &val, bool *need_restart) {
     uint64_t version;
     if (!node->ReadLockOrRestart(&version)) {
+      std::cerr << __LINE__ << '\n';
       *need_restart = true;
       return false;
     }
@@ -60,6 +63,7 @@ class BPlusTree {
         // 节点空间不足，要分裂。
         if (parent) {
           if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
+            std::cerr << __LINE__ << '\n';
             *need_restart = true;
             return false;
           }
@@ -69,6 +73,7 @@ class BPlusTree {
           if (parent) {
             parent->WriteUnlock();
           }
+          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -78,6 +83,7 @@ class BPlusTree {
           // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
           // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
           inner->WriteUnlock();
+          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -95,12 +101,14 @@ class BPlusTree {
           parent->WriteUnlock();
         }
         // 分裂完毕，重新开始插入流程。
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
 
       if (parent) {
         if (!parent->ReadUnlockOrRestart(parent_version)) {
+          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
@@ -108,6 +116,7 @@ class BPlusTree {
 
       Node *child = inner->FindChild(key);
       if (!inner->CheckOrRestart(version)) {
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
@@ -117,6 +126,7 @@ class BPlusTree {
     LNode *leaf = static_cast<LNode *>(node);
     if (leaf->Exists(key)) {
       if (!leaf->ReadUnlockOrRestart(version)) {
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
       } else {
         *need_restart = false;
@@ -129,12 +139,14 @@ class BPlusTree {
         // leaf节点要分裂，回向父节点插入key，要先拿到父节点的写锁。
         // 之前访问父节点已经保证了父节点的空间足够，如果在访问后父节点发生了改动，那么这里会加锁失败。
         if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
+          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }
       }
 
       if (!leaf->UpgradeToWriteLockOrRestart(version)) {
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         if (parent) {
           parent->WriteUnlock();
@@ -147,6 +159,7 @@ class BPlusTree {
         // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
         // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
         leaf->WriteUnlock();
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
@@ -174,12 +187,14 @@ class BPlusTree {
       return true;
     } else {
       // leaf 节点空间足够，直接插入不需要再对父节点加写锁了
-      if (leaf->UpgradeToWriteLockOrRestart(version)) {
+      if (!leaf->UpgradeToWriteLockOrRestart(version)) {
+        std::cerr << __LINE__ << '\n';
         *need_restart = true;
         return false;
       }
       if (parent) {
         if (!parent->ReadUnlockOrRestart(parent_version)) {
+          std::cerr << __LINE__ << '\n';
           *need_restart = true;
           return false;
         }

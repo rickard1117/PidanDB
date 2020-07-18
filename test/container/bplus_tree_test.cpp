@@ -1,13 +1,17 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <iostream>
 #include <iterator>
+#include <map>
 #include <random>
 #include <string>
+#include <set>
 
 #include "common/slice.h"
 #include "container/bplustree/node.h"
 #include "container/bplustree/tree.h"
+#include "test/test_util.h"
 
 namespace pidan {
 
@@ -210,17 +214,66 @@ TEST(BPlusTreeNodeTest, InnerNodeSplit) {
   }
 }
 
-TEST(BPlusTreeTest, OneNodeBPTree) {
+TEST(BPlusTreeNodeTest, InnerNodeNotEnoughSpace) {
+  // 测试场景：将随机字符串插入inner node中直到空间不足
+  // 然后分裂节点，检查分裂后两个节点内容的正确性。
+  std::map<std::string, Node *> keys;
+  int fake_child = 1;
+  keys["abcdefghijkl"] = reinterpret_cast<Node *>(fake_child++);
+  InnerNode<Key> node(1, nullptr, keys["abcdefghijkl"], "abcdefghijkl");
+  for (;;) {
+    std::string s = ::pidan::test::GenRandomString(10, 100);
+    if (!node.EnoughSpaceFor(s.size())) {
+      ASSERT_FALSE(node.Insert(s, reinterpret_cast<Node *>(fake_child)));
+      break;
+    }
+    ASSERT_TRUE(node.Insert(s, reinterpret_cast<Node *>(fake_child)));
+    keys[s] = reinterpret_cast<Node *>(fake_child++);
+  }
+
+  Slice split_key;
+  auto sibling = node.Split(&split_key);
+  ASSERT_EQ(keys.size() - 1, node.size() + sibling->size());
+}
+
+TEST(BPlusTreeTest, OneNodeTree) {
   // 测试最简单的场景，B+树中只有一个根节点。
   BPlusTree<Key, Value> tree;
   Value temp_val;
 
-  for (int v = 1; v < 100; ++v) {
+  std::vector<int> keys;
+  for (int i = 101; i <= 199; i++) {
+    keys.push_back(i);
+  }
+  std::random_device rd;
+  std::mt19937 g(rd());
+
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  for (auto &v : keys) {
     std::string k = std::to_string(v);
     ASSERT_FALSE(tree.Lookup(k, &temp_val));
     ASSERT_TRUE(tree.InsertUnique(k, v));
     ASSERT_TRUE(tree.Lookup(k, &temp_val));
     ASSERT_EQ(temp_val, v);
+  }
+}
+
+TEST(BPlusTreeTest, RandomInsertAndLookupTree) {
+  std::set<std::string, uint64_t> kvs;
+  BPlusTree<Key, Value> tree;
+  Value temp_val;
+  std::set<std::string> keys;
+  for (int i = 0; i < 1024; i++) {
+    std::cerr << "loop : " << i << '\n';
+    std::string k = ::pidan::test::GenRandomString(8, 1024);
+    if (keys.find(k) != keys.end()) {
+      std::cerr << "repeat key : " << k << '\n';
+    }
+    ASSERT_FALSE(tree.Lookup(k, &temp_val));
+    ASSERT_TRUE(tree.InsertUnique(k, i));
+    ASSERT_TRUE(tree.Lookup(k, &temp_val));
+    ASSERT_EQ(temp_val, i);
   }
 }
 
