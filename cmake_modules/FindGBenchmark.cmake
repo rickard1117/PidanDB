@@ -48,7 +48,7 @@ if ( _gbenchmark_roots )
         PATHS ${_gbenchmark_roots} NO_DEFAULT_PATH
         PATH_SUFFIXES "lib" )
 else ()
-    find_path( GBENCHMARK_INCLUDE_DIR NAMES benchmark/benchmark.hh )
+    find_path( GBENCHMARK_INCLUDE_DIR NAMES benchmark/benchmark.h )
     find_library( GBENCHMARK_LIBRARIES NAMES benchmark )
 endif ()
 

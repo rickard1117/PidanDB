@@ -12,16 +12,16 @@ if (NOT TBB_FOUND)
     message(FATAL_ERROR "Cannot find Google Test Framework!")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -Wall -Wextra -Werror -march=native")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -Wno-unused-parameter -fno-omit-frame-pointer -fno-optimize-sibling-calls")
-set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -fPIC")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fPIC")
-set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -fPIC")
+include(SetupCxxFlags)
 
 set(PIDAN_SRC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/src/include)
 include_directories(${PIDAN_SRC_INCLUDE_DIR})
 
 option(BUILD_UNIT_TEST "build googletest unit tests" ON)
+option(BUILD_BENCHMARK "build benchmark" ON)
+
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 if (BUILD_UNIT_TEST)
     enable_testing()
@@ -32,7 +32,14 @@ if (BUILD_UNIT_TEST)
     add_subdirectory(test)
 endif()
 
+if (BUILD_BENCHMARK)
+    find_package(GBenchmark REQUIRED)
+    if (NOT GBENCHMARK_FOUND)
+        message(FATAL_ERROR "Cannot find Google Benchmark Framework!")
+    endif()
+    add_subdirectory(benchmark)
+endif()
 
-# set(PIDAN_TEST_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/test/include)
+
 
 add_subdirectory(src)
