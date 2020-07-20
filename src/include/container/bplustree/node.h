@@ -123,11 +123,30 @@ class KeyMap {
 
   // 在keymap中找到第一个不小于key的下标。下标的最小值为0，最大值为Size()的返回值。
   uint16_t FindLower(const KeyType &key) const {
-    uint16_t idx = 0;
-    while (idx < size_ && KeyAt(idx) < key) {
-      idx++;
+    if (size_ == 0) {
+      return 0;
     }
-    return idx;
+    uint16_t lo = 0, hi = size_;
+
+    while(lo < hi) {
+      uint16_t mid = (lo + hi) >> 1;
+      int result = KeyAt(mid).compare(key);
+      if (result == 0) {
+        return mid;
+      }
+      if (result < 0) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+    // uint16_t idx = 0;
+
+    // while (idx < size_ && KeyAt(idx) < key) {
+    //   idx++;
+    // }
+    // return idx;
   }
 
   KeyType KeyAt(uint16_t index) const {

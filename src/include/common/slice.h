@@ -34,10 +34,24 @@ class Slice {
 
   std::string ToString() const { return std::string(data_, size_); }
 
+  int compare(const Slice& b) const;
+  
  private:
   const char *data_;
   size_t size_;
 };
+
+inline int Slice::compare(const Slice& b) const {
+  const size_t min_len = (size_ < b.size_) ? size_ : b.size_;
+  int r = memcmp(data_, b.data_, min_len);
+  if (r == 0) {
+    if (size_ < b.size_)
+      r = -1;
+    else if (size_ > b.size_)
+      r = +1;
+  }
+  return r;
+}
 
 inline bool operator<(const Slice &x, const Slice &y) {
   const size_t min_len = (x.size() < y.size()) ? x.size() : y.size();

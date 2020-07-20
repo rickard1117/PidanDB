@@ -9,28 +9,39 @@
 using Key = pidan::Slice;
 using Value = uint64_t;
 
-static void BM_BPlusTreeLookup(benchmark::State &state) {
+class BPlusTreeBenchmark : public benchmark::Fixture {
+ public:
+  void SetUp(const benchmark::State &state) final {
+    // std::vector<std::string> keys;
+    for (int i = 10000000; i <= num_keys_ + 10000000; i++) {
+      keys_.push_back(std::to_string(i) + std::to_string(i + 1) + std::to_string(i + 2) + std::to_string(i + 3));
+    }
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    std::shuffle(keys_.begin(), keys_.end(), g);
+  }
+
+  void TearDown(const benchmark::State &state) final {}
+  const uint32_t num_keys_ = 1000000;
+  std::vector<std::string> keys_;
+};
+
+BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookup)(benchmark::State &state) {
   pidan::BPlusTree<Key, Value> tree;
   Value temp_val;
 
-  std::vector<std::string> keys;
-  for (int i = 0; i <= 100000; i++) {
-    keys.push_back(std::to_string(i));
-  }
-  std::random_device rd;
-  std::mt19937 g(rd());
-
-  std::shuffle(keys.begin(), keys.end(), g);
-  for (auto &k : keys) {
+  for (auto &k : keys_) {
     tree.InsertUnique(k, 0);
   }
 
   for (auto _ : state) {
-    for (auto &i : keys) {
+    for (auto &i : keys_) {
       tree.Lookup(i, &temp_val);
     }
   }
 }
-BENCHMARK(BM_BPlusTreeLookup);
+
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond)->MinTime(3);
 
 BENCHMARK_MAIN();
