@@ -5,7 +5,7 @@
 
 #include "common/config.h"
 #include "common/type.h"
-#include "concurrency/transaction.h"
+#include "transaction/transaction.h"
 #include "storage/value_slot.h"
 
 namespace pidan {

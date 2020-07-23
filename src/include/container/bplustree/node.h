@@ -128,7 +128,7 @@ class KeyMap {
     }
     uint16_t lo = 0, hi = size_;
 
-    while(lo < hi) {
+    while (lo < hi) {
       uint16_t mid = (lo + hi) >> 1;
       int result = KeyAt(mid).compare(key);
       if (result == 0) {
@@ -141,12 +141,6 @@ class KeyMap {
       }
     }
     return lo;
-    // uint16_t idx = 0;
-
-    // while (idx < size_ && KeyAt(idx) < key) {
-    //   idx++;
-    // }
-    // return idx;
   }
 
   KeyType KeyAt(uint16_t index) const {

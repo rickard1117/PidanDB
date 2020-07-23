@@ -12,9 +12,8 @@ using Value = uint64_t;
 class BPlusTreeBenchmark : public benchmark::Fixture {
  public:
   void SetUp(const benchmark::State &state) final {
-    // std::vector<std::string> keys;
     for (int i = 10000000; i <= num_keys_ + 10000000; i++) {
-      keys_.push_back(std::to_string(i) + std::to_string(i + 1) + std::to_string(i + 2) + std::to_string(i + 3));
+      keys_.push_back(std::to_string(i) + std::to_string(i + 1) + std::to_string(i + 2));
     }
     std::random_device rd;
     std::mt19937 g(rd());
@@ -42,6 +41,6 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookup)(benchmark::State &state)
   }
 }
 
-BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond)->MinTime(3);
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
