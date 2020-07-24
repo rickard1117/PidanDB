@@ -25,14 +25,26 @@ class DataLatch {
 
  private:
   // 根据latch_flag的值返回一个新值，新的值表示加了读锁。
-  uint64_t SetReadBits(uint64_t latch_);
-  //
-  uint64_t UnsetReadBits(uint64_t latch_);
+  uint64_t SetReadBits(uint64_t latch) { return latch + (1UL << 48); }
+  // 
+  uint64_t UnsetReadBits(uint64_t latch) { return latch - (1UL << 48); }
 
   // 判断flag上是否已经加了写锁了
-  bool LockedOnWrite(uint64_t latch_);
+  bool LockedOnWrite(uint64_t latch) {
+    return GetWriteBits(latch) != NULL_DATA_LATCH;
+  }
   //
-  bool LockedOnRead(uint64_t latch_);
+  bool LockedOnRead(uint64_t latch) {
+    return GetReadBits(latch) != NULL_DATA_LATCH;
+  }
+  
+  uint64_t GetReadBits(uint64_t latch) {
+    return latch & ~((1UL << 48) - 1);
+  }
+
+  uint64_t GetWriteBits(uint64_t latch) {
+    return latch & ((1UL << 48) - 1);
+  }
 
   std::atomic<uint64_t> latch_{NULL_DATA_LATCH};
 };

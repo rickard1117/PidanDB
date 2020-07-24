@@ -2,9 +2,11 @@
 
 #include <gtest/gtest.h>
 
+#include <thread>
+
 namespace pidan {
 
-TEST(DataLatchTest, SingleThreadLatch) {
+TEST(DataLatchTest, SingleThreadTest) {
   DataLatch latch;
   // 测试场景：加了写锁之后就不可以再加其他类型的锁
   ASSERT_TRUE(latch.TryWriteLock(1));
@@ -24,5 +26,7 @@ TEST(DataLatchTest, SingleThreadLatch) {
   latch.ReadUnlock();
   ASSERT_TRUE(latch.TryWriteLock(1));
 }
+
+TEST(DataLatchTest, MultiThreadTest) {}
 
 }  // namespace pidan

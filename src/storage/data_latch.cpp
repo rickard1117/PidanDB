@@ -1,5 +1,7 @@
 #include "storage/data_latch.h"
 
+#include <cassert>
+
 namespace pidan {
 
 bool DataLatch::TryWriteLock(txn_id_t txn_id) {
@@ -14,7 +16,7 @@ bool DataLatch::TryWriteLock(txn_id_t txn_id) {
     return false;
   }
 
-  return latch_.compare_exchange_strong(NULL_DATA_LATCH, txn_id);
+  return latch_.compare_exchange_strong(flag, txn_id);
 }
 
 void DataLatch::WriteUnlock(txn_id_t txn_id) {
@@ -47,4 +49,4 @@ void DataLatch::ReadUnlock() {
   }
 }
 
-}
+}  // namespace pidan
