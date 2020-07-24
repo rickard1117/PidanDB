@@ -6,6 +6,7 @@
 #include "common/type.h"
 
 namespace pidan {
+
 // 用于数据项的锁
 class DataLatch {
  public:
@@ -48,4 +49,7 @@ class DataLatch {
 
   std::atomic<uint64_t> latch_{NULL_DATA_LATCH};
 };
+
+
+
 }  // namespace pidan

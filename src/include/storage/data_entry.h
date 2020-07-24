@@ -13,10 +13,10 @@ class DataEntry {
 
   static DataEntry *NewDataEntry(int32_t size, const char *data);
 
+  
  private:
   int64_t size_;
-  std::atomic<timestamp_t> timestamp_;
-  DataEntry *next_;
+  
   char data_[0];
 };
 
