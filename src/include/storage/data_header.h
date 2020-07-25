@@ -27,7 +27,6 @@ class DataHeader {
   bool Select(Transaction *txn, std::string *val);
 
  private:
-  friend class TransactionManager;
   // txn_id_表示了当前正在修改此数据项的事务，可以当做此数据项的latch_
   DataLatch latch_;
   std::atomic<UndoRecord *> version_chain_{nullptr};

@@ -13,6 +13,10 @@ enum class TransactionType { WRITE, READ };
 
 class Transaction {
  public:
+  DISALLOW_COPY_AND_MOVE(Transaction);
+
+  Transaction(TransactionType type, timestamp_t t) : type_(type), timestamp_(t) {}
+
   timestamp_t ID() const { return timestamp_; }
 
   UndoRecord *NewUndoRecordForPut(DataHeader *data_header, const Slice &val);
@@ -30,4 +34,5 @@ class Transaction {
   TransactionType type_;
   timestamp_t timestamp_;
 };
+
 }  // namespace pidan
