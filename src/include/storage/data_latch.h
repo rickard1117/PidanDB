@@ -15,14 +15,14 @@ class DataLatch {
   DataLatch() = default;
 
   // 尝试为此数据项加写锁，加锁成功返回true，否则返回false
-  bool TryWriteLock(txn_id_t txn_id);
+  bool TryWriteLock(timestamp_t txn_id);
 
   // 尝试为此数据项加读锁，加锁成功返回true，否则返回false
   bool TryReadLock();
 
   void ReadUnlock();
 
-  void WriteUnlock(txn_id_t txn_id);
+  void WriteUnlock(timestamp_t txn_id);
 
  private:
   // 根据latch_flag的值返回一个新值，新的值表示加了读锁。

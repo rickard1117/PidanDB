@@ -4,10 +4,15 @@
 
 namespace pidan {
 
-UndoRecord *Transaction::NewUndoRecord() {
-     auto record = new UndoRecord();
-     undo_records_.push_back(record);
-     return record;
+UndoRecord *Transaction::NewUndoRecordForPut(DataHeader *data_header, const Slice &val) {
+  auto buf = new char[sizeof(UndoRecord) + val.size()];
+  auto record = reinterpret_cast<UndoRecord *>(buf);
+  record->type_ = UndoRecordType::PUT;
+  record->timestamp_ = MAX_TIMESTAMP;
+  record->next_ = nullptr;
+  record->header_ = data_header;
+  record->data_.Init(val);
+  return record;
 }
 
 }  // namespace pidan
