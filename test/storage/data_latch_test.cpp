@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <thread>
 
 namespace pidan {
@@ -27,6 +28,28 @@ TEST(DataLatchTest, SingleThreadTest) {
   ASSERT_TRUE(latch.TryWriteLock(1));
 }
 
-TEST(DataLatchTest, MultiThreadTest) {}
+void Read(DataLatch &latch) { 
+  EXPECT_TRUE(latch.TryReadLock()); 
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  latch.ReadUnlock();
+}
+
+void Write(DataLatch &latch) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  EXPECT_FALSE(latch.TryWriteLock(1));
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  EXPECT_TRUE(latch.TryWriteLock(1));
+  latch.WriteUnlock(1);
+}
+
+TEST(DataLatchTest, MultiThreadTest) {
+  DataLatch latch;
+  std::thread t1(Read, std::ref(latch)), t2(Write, std::ref(latch));
+
+  t1.join();
+  t2.join();
+}
+
+
 
 }  // namespace pidan
