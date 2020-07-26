@@ -17,5 +17,3 @@
   cname() = delete;                      \
   DISALLOW_COPY_AND_MOVE(cname);         \
   ~cname() = delete;
-
-#define NODE_TEST_FRIEND friend class BPlusTree

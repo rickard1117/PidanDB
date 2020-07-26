@@ -7,7 +7,9 @@
 
 namespace pidan {
 
-// 用于数据项的锁
+// 用于数据项的锁。为写事务提供读写锁（只读事务不需要加锁）。
+// 读写锁之间互相冲突，first writer win。读锁之间不冲突。
+// 同一个事务如果已经加了写锁，再次加读锁不会失败，解锁时只需要解除写锁即可。
 class DataLatch {
  public:
   DISALLOW_COPY_AND_MOVE(DataLatch);
@@ -15,14 +17,14 @@ class DataLatch {
   DataLatch() = default;
 
   // 尝试为此数据项加写锁，加锁成功返回true，否则返回false
-  bool TryWriteLock(timestamp_t txn_id);
+  bool TryWriteLock(txn_id_t txn_id);
 
   // 尝试为此数据项加读锁，加锁成功返回true，否则返回false
-  bool TryReadLock();
+  bool TryReadLock(txn_id_t txn_id);
 
   void ReadUnlock();
 
-  void WriteUnlock(timestamp_t txn_id);
+  void WriteUnlock(txn_id_t txn_id);
 
  private:
   // 根据latch_flag的值返回一个新值，新的值表示加了读锁。

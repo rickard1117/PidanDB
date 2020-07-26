@@ -1,7 +1,7 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-
+#include <string>
 #include "common/macros.h"
 #include "common/slice.h"
 #include "common/type.h"
@@ -12,10 +12,13 @@ class DataEntry {
  public:
   DISALLOW_COPY_AND_MOVE(DataEntry);
 
-  // static DataEntry *NewDataEntry(int32_t size, const char *data);
-
   void Init(const Slice &slice);
 
+  // only for test
+  std::string ToString() const {
+    return std::string(data_, size_);
+  }
+  
  private:
   friend class UndoRecord;
   int64_t size_;

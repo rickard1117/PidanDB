@@ -13,7 +13,7 @@ bool DataHeader::Put(Transaction *txn, const Slice &val) {
   }
   auto undo = txn->NewUndoRecordForPut(this, val);
   auto version_chain = version_chain_.load();
-  // 这里不需要原子操作
+  // 这里不需要原子操作，因为没有其他线程知道undo的存在。
   undo->Next() = version_chain;
   // 但是对version chain的修改需要原子操作，因为可能其他读事务正准备访问version chain
   auto result = version_chain_.compare_exchange_strong(version_chain, undo);
@@ -46,17 +46,20 @@ bool DataHeader::Select(Transaction *txn, std::string *val) {
   }
 
   // 写事务要加读锁
-  if (!latch_.TryReadLock()) {
+  if (!latch_.TryReadLock(txn->ID())) {
     return false;
   }
 
   // 写事务的读操作直接读取最新内容。
   UndoRecord *undo = version_chain_.load();
   assert(undo != nullptr);
-  txn->AddRead(undo);
-  if (undo->Type() == UndoRecordType::DELETE) {
-    return true;
+  if (!txn->LockedOnWrite(undo)) {
+    // 如果已经加了写锁，这里就不需要记录到read set了
+    txn->AddRead(undo);
   }
+  // if (undo->Type() == UndoRecordType::DELETE) {
+  //   return true;
+  // }
   undo->GetData(val);
   return true;
 }

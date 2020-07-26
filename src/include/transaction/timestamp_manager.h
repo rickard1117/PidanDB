@@ -14,14 +14,14 @@ class TimestampManager {
  public:
   DISALLOW_COPY_AND_MOVE(TimestampManager);
 
-  TimestampManager() : timestamp_(0){};
+  TimestampManager() = default;
 
-  timestamp_t CheckOutTimestamp() { return time_++; }
+  timestamp_t CheckOutTimestamp() { return ++timestamp_; }
 
-  timestamp_t CurrentTime() const { return time_.load(); }
+  timestamp_t CurrentTime() const { return timestamp_.load(); }
 
  private:
-  std::atomic<timestamp_t> timestamp_;
+  std::atomic<timestamp_t> timestamp_{INIT_TIMESTAMP};
 };
 
 }  // namespace pidan

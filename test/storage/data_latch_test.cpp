@@ -13,23 +13,23 @@ TEST(DataLatchTest, SingleThreadTest) {
   ASSERT_TRUE(latch.TryWriteLock(1));
   ASSERT_FALSE(latch.TryWriteLock(2));
   ASSERT_TRUE(latch.TryWriteLock(1));
-  ASSERT_FALSE(latch.TryReadLock());
+  ASSERT_FALSE(latch.TryReadLock(2));
   latch.WriteUnlock(1);
 
   // 测试场景：加了读锁之后不可以再加写锁，并且测试读锁的引用计数功能。
-  ASSERT_TRUE(latch.TryReadLock());
+  ASSERT_TRUE(latch.TryReadLock(2));
   ASSERT_FALSE(latch.TryWriteLock(1));
-  ASSERT_TRUE(latch.TryReadLock());
+  ASSERT_TRUE(latch.TryReadLock(2));
   latch.ReadUnlock();
   ASSERT_FALSE(latch.TryWriteLock(1));
-  ASSERT_TRUE(latch.TryReadLock());
+  ASSERT_TRUE(latch.TryReadLock(2));
   latch.ReadUnlock();
   latch.ReadUnlock();
   ASSERT_TRUE(latch.TryWriteLock(1));
 }
 
 void Read(DataLatch &latch) { 
-  EXPECT_TRUE(latch.TryReadLock()); 
+  EXPECT_TRUE(latch.TryReadLock(1)); 
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   latch.ReadUnlock();
 }
