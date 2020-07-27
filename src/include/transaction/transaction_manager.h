@@ -27,7 +27,7 @@ class TransactionManager {
 
  private:
   TimestampManager *ts_manager_;
-  txn_id_t txn_auto_id_{INIT_TXN_ID};
+  // txn_id_t txn_auto_id_{INIT_TXN_ID};
   std::mutex commit_lock_;  // 此锁保证同一时间只能有一个事务进行提交
 };
 

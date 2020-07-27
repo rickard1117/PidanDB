@@ -30,6 +30,8 @@ class UndoRecord {
 
   void SetTimestamp(timestamp_t ts) { timestamp_ = ts; }
 
+  timestamp_t GetTimestamp() { return timestamp_; }
+
  private:
   // 只能由Transaction类来初始化成员变量
   friend class Transaction;

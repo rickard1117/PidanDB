@@ -6,7 +6,7 @@
 #include "common/slice.h"
 #include "common/type.h"
 #include "storage/data_entry.h"
-#include "storage/data_latch.h"
+#include "common/nowait_rw_latch.h"
 #include "transaction/transaction.h"
 
 namespace pidan {
@@ -23,13 +23,13 @@ class DataHeader {
   bool Put(Transaction *txn, const Slice &val);
 
   // 查找到对当前事务可见的值，成功返回true，否则返回false
-  // 读事务一定不会失败。如果找不到，则不会对val做任何填充操作
-  bool Select(Transaction *txn, std::string *val);
+  // 读事务一定不会失败。如果找不到，则不会对val做任何改动，并且not_found为true
+  bool Select(Transaction *txn, std::string *val, bool *not_found);
 
  private:
-  friend class TransactionManager;
+  friend class Transaction;
   // txn_id_表示了当前正在修改此数据项的事务，可以当做此数据项的latch_
-  DataLatch latch_;
+  NoWaitRWLatch latch_;
   std::atomic<UndoRecord *> version_chain_{nullptr};
 };
 
