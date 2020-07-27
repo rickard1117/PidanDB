@@ -51,7 +51,6 @@ void Transaction::MakeWriteVisible(timestamp_t timestamp) {
   RelaseAllWriteLock();
 }
 
-// 释放所有读锁，用于事务提交。
 void Transaction::RealseAllReadLock() {
   for (auto *dh : read_lock_set_) {
     dh->latch_.ReadUnlock();
@@ -61,6 +60,30 @@ void Transaction::RealseAllReadLock() {
 void Transaction::RelaseAllWriteLock() {
   for (auto *dh : write_lock_set_) {
     dh->latch_.WriteUnlock();
+  }
+}
+
+void Transaction::Rollback() {
+  if (Type() == TransactionType::READ) {
+    return;
+  }
+  for (auto *data_header : write_lock_set_) {
+    RollbackAllUndoRecord(data_header);
+    data_header->latch_.WriteUnlock();
+  }
+  RealseAllReadLock();
+}
+
+void Transaction::RollbackAllUndoRecord(DataHeader *data_header) {
+  auto *undo = data_header->version_chain_.load();
+  assert(undo != nullptr);
+  while (undo->GetTimestamp() == MAX_TIMESTAMP) {
+    auto result = data_header->version_chain_.compare_exchange_strong(undo, undo->Next());
+    assert(result);
+    if (undo->Next() == nullptr) {
+      return;
+    }
+    undo = undo->Next();
   }
 }
 

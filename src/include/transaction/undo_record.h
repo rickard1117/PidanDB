@@ -28,7 +28,7 @@ class UndoRecord {
 
   DataHeader *GetDataHeader() { return header_; }
 
-  void SetTimestamp(timestamp_t ts) { timestamp_ = ts; }
+  void SetTimestamp(timestamp_t ts) { timestamp_.store(ts); }
 
   timestamp_t GetTimestamp() { return timestamp_; }
 

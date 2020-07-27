@@ -64,7 +64,7 @@ TEST(TransactionManagerTest, MixupTest) {
 
 TEST(TransactionManagerTest, SelectNotFound) {
     // dataheader刚被一个写事务创建，此时它写入的内容不会被任何其他人看到，读事务会返回not_found
-
+    
 }
 
 }  // namespace pidan

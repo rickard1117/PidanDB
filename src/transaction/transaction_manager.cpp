@@ -29,6 +29,9 @@ void TransactionManager::Commit(Transaction *txn) {
   ts_manager_->CheckOutTimestamp();
 }
 
-void TransactionManager::Abort(Transaction *txn) { (void)txn; }
+void TransactionManager::Abort(Transaction *txn) { 
+  // 回滚事务，就是要删除所有此事务创建的新版本。
+  txn->Rollback();
+}
 
 }  // namespace pidan
