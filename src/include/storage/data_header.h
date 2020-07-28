@@ -19,6 +19,9 @@ class DataHeader {
 
   DataHeader() = default;
 
+  // 创建DataHeader时候，用txn对DataHeader加写锁
+  DataHeader(Transaction *txn);
+
   // 插入一个新的值，插入成功返回true，否则返回false
   bool Put(Transaction *txn, const Slice &val);
 
@@ -26,10 +29,16 @@ class DataHeader {
   // 读事务一定不会失败。如果找不到，则不会对val做任何改动，并且not_found为true
   bool Select(Transaction *txn, std::string *val, bool *not_found);
 
+  // 将此DataHeader标记为删除，只能由GC线程调用。
+  // GC线程标记为删除后，会在将来某个GC周期将其占有的内存全部释放。
+  void SetDelete() { to_be_deleted_.store(1); }
+
+  bool IsDelete() { return to_be_deleted_.load() == 1; }
+
  private:
   friend class Transaction;
-  // txn_id_表示了当前正在修改此数据项的事务，可以当做此数据项的latch_
   NoWaitRWLatch latch_;
+  std::atomic<uint32_t> to_be_deleted_{0};
   std::atomic<UndoRecord *> version_chain_{nullptr};
 };
 

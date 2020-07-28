@@ -3,7 +3,7 @@
 namespace pidan {
 
 bool NoWaitRWLatch::TryWriteLock() {
-    uint64_t null_latch = NULL_DATA_LATCH;
+    uint32_t null_latch = NULL_DATA_LATCH;
     return latch_.compare_exchange_strong(null_latch, write_latch_status); 
 }
 

@@ -6,6 +6,12 @@
 
 namespace pidan {
 
+DataHeader::DataHeader(Transaction *txn) {
+  auto result = latch_.TryWriteLock();
+  assert(result);
+  txn->WriteLockOn(this);
+}
+
 bool DataHeader::Put(Transaction *txn, const Slice &val) {
   assert(txn->Type() == TransactionType::WRITE);
 

@@ -3,24 +3,29 @@
 #include <string>
 
 #include "pidan/slice.h"
+#include "pidan/errors.h"
 
 namespace pidan {
 
 class PidanDB {
  public:
-  void Open(const std::string &name, PidanDB **dbptr);
+  PidanDB() = default;
 
-  virtual void Put(const Slice &key, const Slice &value) = 0;
+  virtual ~PidanDB();
 
-  virtual void Get(const Slice &key, std::string *val) = 0;
+  static Status Open(const std::string &name, PidanDB **dbptr);
 
-  virtual void Delete(const Slice &key) = 0;
+  virtual Status Put(const Slice &key, const Slice &value) = 0;
 
-  virtual void Begin();
+  virtual Status Get(const Slice &key, std::string *val) = 0;
 
-  virtual void Commit();
+  virtual Status Delete(const Slice &key) = 0;
 
-  virtual void Abort();
+  virtual Status Begin() = 0;
+
+  virtual Status Commit() = 0;
+
+  virtual Status Abort() = 0;
 };
 
 }  // namespace pidan

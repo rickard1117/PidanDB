@@ -32,13 +32,13 @@ class NoWaitRWLatch {
   bool NoLock() { return latch_.load() == NULL_DATA_LATCH; }
 
  private:
-  bool LockedOnWrite(uint64_t latch) { return latch == write_latch_status; }
+  bool LockedOnWrite(uint32_t latch) { return latch == write_latch_status; }
 
   // 加了写锁的状态
-  static constexpr uint64_t write_latch_status = (1UL << 63);
+  static constexpr uint32_t write_latch_status = (1UL << 31);
   // 用最高位来表示是否加了写锁。
   // 用其他位表示读锁的计数。
-  std::atomic<uint64_t> latch_{NULL_DATA_LATCH};
+  std::atomic<uint32_t> latch_{NULL_DATA_LATCH};
 };
 
 }  // namespace pidan

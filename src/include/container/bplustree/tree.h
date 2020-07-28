@@ -29,12 +29,13 @@ class BPlusTree {
     }
   }
 
-  // 插入一对key value，要求key是唯一的。如果key已经存在则返回false，插入成功返回true。
-  bool InsertUnique(const KeyType &key, const ValueType &value) {
+  // 插入一对key value，要求key是唯一的。如果key已经存在则返回false，并将value设置为已经存在的值。
+  // 插入成功返回true，不对value做任何改动。
+  bool InsertUnique(const KeyType &key, const ValueType &value, ValueType *old_val) {
     for (;;) {
       Node *node = root_.load();
       bool need_restart = false;
-      bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
+      bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, old_val, &need_restart);
       if (need_restart) {
         continue;
       }
@@ -107,7 +108,7 @@ class BPlusTree {
 
   // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
   bool StartInsertUnique(Node *node, INode *parent, const uint64_t parent_version, const KeyType &key,
-                         const ValueType &val, bool *need_restart) {
+                         const ValueType &val, ValueType *old_val bool *need_restart) {
     uint64_t version;
     if (!node->ReadLockOrRestart(&version)) {
       *need_restart = true;
@@ -171,11 +172,11 @@ class BPlusTree {
         *need_restart = true;
         return false;
       }
-      return StartInsertUnique(child, inner, version, key, val, need_restart);
+      return StartInsertUnique(child, inner, version, key, val, old_val, need_restart);
     }
 
     LNode *leaf = static_cast<LNode *>(node);
-    if (leaf->Exists(key)) {
+    if (leaf->Exists(key, old_val)) {
       if (!leaf->ReadUnlockOrRestart(version)) {
         *need_restart = true;
       } else {

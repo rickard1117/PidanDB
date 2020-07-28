@@ -419,13 +419,27 @@ class LeafNode : public Node {
   size_t size() const { return key_map_.size(); }
 
   // 检查key是否存在于节点当中
+  // 如果存在，则将
+  bool Exists(const KeyType &key, ValueType *val) {
+    uint16_t index = key_map_.FindLower(key);
+    if (index >= key_map_.size()) {
+      return false;
+    }
+    auto kv = key_map_.KeyValueAt(index);
+    if (kv.first!=key) {
+      return false;
+    }
+    *val = kv.second;
+    return true;
+  }
+
   bool Exists(const KeyType &key) {
     uint16_t index = key_map_.FindLower(key);
     if (index >= key_map_.size()) {
       return false;
     }
     auto k = key_map_.KeyAt(index);
-    return k == key;
+    return k == key
   }
 
   // 是否有足够的空间来插入大小为key_size的key

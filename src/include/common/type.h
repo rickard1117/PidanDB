@@ -16,7 +16,7 @@ static constexpr uint64_t INVALID_OLC_LOCK_VERSION = 0;
 static constexpr size_t POINTER_SIZE = sizeof(void *);
 static constexpr timestamp_t MAX_TIMESTAMP = UINT64_MAX;
 static constexpr timestamp_t INIT_TIMESTAMP = 1;
-static constexpr uint64_t NULL_DATA_LATCH = 0;
+static constexpr uint32_t NULL_DATA_LATCH = 0;
 static constexpr txn_id_t INIT_TXN_ID = 1;
 
 }  // namespace pidan
