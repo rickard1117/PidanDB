@@ -3,10 +3,10 @@
 #include <string>
 
 #include "common/macros.h"
-#include "common/slice.h"
-#include "common/type.h"
-#include "storage/data_entry.h"
 #include "common/nowait_rw_latch.h"
+#include "common/type.h"
+#include "pidan/slice.h"
+#include "storage/data_entry.h"
 #include "transaction/transaction.h"
 
 namespace pidan {

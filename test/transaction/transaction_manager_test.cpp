@@ -7,7 +7,7 @@
 
 namespace pidan {
 
-TEST(TransactionManagerTest, MixupTest) {
+TEST(TransactionManagerTest, MixupReadWriteTest) {
   TimestampManager ts_manager;
   TransactionManager txn_manager(&ts_manager);
   DataHeader data_header1, data_header2;
@@ -63,8 +63,56 @@ TEST(TransactionManagerTest, MixupTest) {
 }
 
 TEST(TransactionManagerTest, SelectNotFound) {
-    // dataheader刚被一个写事务创建，此时它写入的内容不会被任何其他人看到，读事务会返回not_found
-    
+  // dataheader刚被创建，此时它写入的内容不会被任何其他人看到，读事务会返回not_found
+  TimestampManager ts_manager;
+  TransactionManager txn_manager(&ts_manager);
+  DataHeader data_header;
+  auto *txn1 = txn_manager.BeginWriteTransaction();
+  ASSERT_TRUE(data_header.Put(txn1, "abc"));
+
+  std::string temp_val;
+  bool not_found;
+  auto *txn2 = txn_manager.BeginReadTransaction();
+  ASSERT_TRUE(data_header.Select(txn2, &temp_val, &not_found));
+  ASSERT_TRUE(not_found);
+}
+
+TEST(TransactionManagerTest, AbortTest) {
+  TimestampManager ts_manager;
+  TransactionManager txn_manager(&ts_manager);
+  DataHeader data_header1, data_header2;
+  auto *txn1 = txn_manager.BeginWriteTransaction();
+  auto *txn2 = txn_manager.BeginWriteTransaction();
+  
+  // txn1先写入一些数据
+  ASSERT_TRUE(data_header1.Put(txn1, "abc"));
+  ASSERT_TRUE(data_header1.Put(txn1, "def"));
+  ASSERT_TRUE(data_header2.Put(txn1, "123"));
+
+  // txn1回滚
+  txn_manager.Abort(txn1);
+
+  // txn2查不到这些数据
+  std::string temp_val;
+  bool not_found;
+  ASSERT_TRUE(data_header1.Select(txn2, &temp_val, &not_found));
+  ASSERT_TRUE(not_found);
+  ASSERT_TRUE(data_header2.Select(txn2, &temp_val, &not_found));
+  ASSERT_TRUE(not_found);
+
+  // txn2写数据并提交
+  ASSERT_TRUE(data_header1.Put(txn2, "def"));
+  ASSERT_TRUE(data_header1.Put(txn2, "def"));
+  txn_manager.Commit(txn2);
+
+  // txn3能读到txn2的内容
+  auto *txn3 = txn_manager.BeginReadTransaction();
+  ASSERT_TRUE(data_header1.Select(txn3, &temp_val, &not_found));
+  ASSERT_FALSE(not_found);
+  ASSERT_EQ(temp_val, "def");
+
+  ASSERT_TRUE(data_header2.Select(txn3, &temp_val, &not_found));
+  ASSERT_TRUE(not_found);
 }
 
 }  // namespace pidan

@@ -8,9 +8,9 @@
 #include <set>
 #include <string>
 
-#include "common/slice.h"
 #include "container/bplustree/node.h"
 #include "container/bplustree/tree.h"
+#include "pidan/slice.h"
 #include "test/test_util.h"
 
 namespace pidan {

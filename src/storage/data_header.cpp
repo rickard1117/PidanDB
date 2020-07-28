@@ -80,7 +80,10 @@ bool DataHeader::Select(Transaction *txn, std::string *val, bool *not_found) {
 
   // 写事务的读操作直接读取最新内容。
   UndoRecord *undo = version_chain_.load();
-  assert(undo != nullptr);
+  if (undo == nullptr) {
+    *not_found = true;
+    return true;
+  }
 
   undo->GetData(val);
   *not_found = false;

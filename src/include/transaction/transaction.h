@@ -2,8 +2,8 @@
 #include <set>
 #include <vector>
 
-#include "common/slice.h"
 #include "common/type.h"
+#include "pidan/slice.h"
 #include "transaction/undo_record.h"
 
 namespace pidan {

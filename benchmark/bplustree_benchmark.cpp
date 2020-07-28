@@ -3,7 +3,7 @@
 #include <random>
 #include <vector>
 
-#include "common/slice.h"
+#include "pidan/slice.h"
 #include "container/bplustree/tree.h"
 
 using Key = pidan::Slice;
