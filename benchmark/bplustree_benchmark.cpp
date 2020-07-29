@@ -3,8 +3,8 @@
 #include <random>
 #include <vector>
 
-#include "pidan/slice.h"
 #include "container/bplustree/tree.h"
+#include "pidan/slice.h"
 
 using Key = pidan::Slice;
 using Value = uint64_t;
@@ -22,7 +22,7 @@ class BPlusTreeBenchmark : public benchmark::Fixture {
   }
 
   void TearDown(const benchmark::State &state) final {}
-  const uint32_t num_keys_ = 1000000;
+  const uint32_t num_keys_ = 5000000;
   std::vector<std::string> keys_;
 };
 
@@ -31,7 +31,7 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookup)(benchmark::State &state)
   Value temp_val;
 
   for (auto &k : keys_) {
-    tree.InsertUnique(k, 0);
+    tree.InsertUnique(k, 0, &temp_val);
   }
 
   for (auto _ : state) {
@@ -41,6 +41,18 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookup)(benchmark::State &state)
   }
 }
 
+BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsert)(benchmark::State &state) {
+  pidan::BPlusTree<Key, Value> tree;
+  Value temp_val;
+
+  for (auto _ : state) {
+    for (auto &k : keys_) {
+      tree.InsertUnique(k, 0, &temp_val);
+    }
+  }
+}
+
 BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsert)->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();

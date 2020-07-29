@@ -252,7 +252,7 @@ TEST(BPlusTreeTest, RandomInteger) {
   for (auto &v : keys) {
     std::string k = std::to_string(v);
     ASSERT_FALSE(tree.Lookup(k, &temp_val));
-    ASSERT_TRUE(tree.InsertUnique(k, v));
+    ASSERT_TRUE(tree.InsertUnique(k, v, &temp_val));
     ASSERT_TRUE(tree.Lookup(k, &temp_val));
     ASSERT_EQ(temp_val, v);
   }

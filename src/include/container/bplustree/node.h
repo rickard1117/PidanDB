@@ -426,7 +426,7 @@ class LeafNode : public Node {
       return false;
     }
     auto kv = key_map_.KeyValueAt(index);
-    if (kv.first!=key) {
+    if (kv.first != key) {
       return false;
     }
     *val = kv.second;
@@ -439,7 +439,7 @@ class LeafNode : public Node {
       return false;
     }
     auto k = key_map_.KeyAt(index);
-    return k == key
+    return k == key;
   }
 
   // 是否有足够的空间来插入大小为key_size的key

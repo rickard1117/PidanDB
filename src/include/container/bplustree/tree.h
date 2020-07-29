@@ -108,7 +108,7 @@ class BPlusTree {
 
   // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
   bool StartInsertUnique(Node *node, INode *parent, const uint64_t parent_version, const KeyType &key,
-                         const ValueType &val, ValueType *old_val bool *need_restart) {
+                         const ValueType &val, ValueType *old_val, bool *need_restart) {
     uint64_t version;
     if (!node->ReadLockOrRestart(&version)) {
       *need_restart = true;
