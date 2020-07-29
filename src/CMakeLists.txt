@@ -1,3 +1,6 @@
 file(GLOB_RECURSE pidan_sources ${PROJECT_SOURCE_DIR}/src/*/*.cpp ${PROJECT_SOURCE_DIR}/src/*/*/*.cpp)
 add_library(pidan_shared SHARED ${pidan_sources})
 target_link_libraries(pidan_shared ${TBB_LIBRARIES})
+if (USE_JEMALLOC)
+    target_link_libraries(pidan_shared ${JEMALLOC_LIBRARIES})
+endif()
