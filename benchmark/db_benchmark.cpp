@@ -33,6 +33,24 @@ BENCHMARK_DEFINE_F(DBBenchmark, Put)(benchmark::State &state) {
   }
 }
 
+BENCHMARK_DEFINE_F(DBBenchmark, Get)(benchmark::State &state) {
+  pidan::PidanDB *db = nullptr;
+  pidan::PidanDB::Open("test.db", &db);
+
+  for (auto &i : keys_) {
+    db->Put(i, "123");
+  }
+
+  std::string val;
+  for (auto _ : state) {
+    for (auto &i : keys_) {
+      db->Get(i, &val);
+    }
+  }
+}
+
 BENCHMARK_REGISTER_F(DBBenchmark, Put)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(DBBenchmark, Get)->Unit(benchmark::kMillisecond);
+
 
 BENCHMARK_MAIN();
