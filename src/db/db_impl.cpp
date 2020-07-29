@@ -10,7 +10,7 @@ Status DBImpl::Put(const Slice &key, const Slice &value) {
   auto result = index_.InsertUnique(key, dh, &old_dh);
   if (!result) {
     delete dh;
-    if (old_dh->IsDelete() || !old_dh->Put(txn, value)) {
+    if (!old_dh->Put(txn, value)) {
       txn_manager_.Abort(txn);
       return Status::FAIL_BY_ACTIVE_TXN;
     }
@@ -39,6 +39,10 @@ Status DBImpl::Get(const Slice &key, std::string *val) {
   return Status::SUCCESS;
 }
 
-Status PidanDB::Open(const std::string &name, PidanDB **dbptr) { *dbptr = new DBImpl(); }
+Status PidanDB::Open(const std::string &name, PidanDB **dbptr) { 
+  *dbptr = new DBImpl(); 
+  return Status::SUCCESS;
+  
+  }
 
 }  // namespace pidan

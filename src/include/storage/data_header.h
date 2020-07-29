@@ -31,14 +31,14 @@ class DataHeader {
 
   // 将此DataHeader标记为删除，只能由GC线程调用。
   // GC线程标记为删除后，会在将来某个GC周期将其占有的内存全部释放。
-  void SetDelete() { to_be_deleted_.store(1); }
+  // void SetDelete() { to_be_deleted_.store(1); }
 
-  bool IsDelete() { return to_be_deleted_.load() == 1; }
+  // bool IsDelete() { return to_be_deleted_.load() == 1; }
 
  private:
   friend class Transaction;
   NoWaitRWLatch latch_;
-  std::atomic<uint32_t> to_be_deleted_{0};
+  // std::atomic<uint32_t> to_be_deleted_{0};
   std::atomic<UndoRecord *> version_chain_{nullptr};
 };
 

@@ -11,7 +11,7 @@ class PidanDB {
  public:
   PidanDB() = default;
 
-  virtual ~PidanDB();
+  virtual ~PidanDB() = default;
 
   static Status Open(const std::string &name, PidanDB **dbptr);
 

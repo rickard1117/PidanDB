@@ -22,7 +22,7 @@ class BPlusTreeBenchmark : public benchmark::Fixture {
   }
 
   void TearDown(const benchmark::State &state) final {}
-  const uint32_t num_keys_ = 5000000;
+  const uint32_t num_keys_ = 1000000;
   std::vector<std::string> keys_;
 };
 
