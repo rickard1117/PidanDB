@@ -7,9 +7,11 @@
 #include <random>
 #include <string>
 
-namespace pidan::test {
+#include "common/thread_pool.h"
 
-std::string GenRandomString(size_t min_size, size_t max_size) {
+namespace pidan {
+
+static std::string GenRandomString(size_t min_size, size_t max_size) {
   std::random_device rd;   // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd());  // Standard mersenne_twister_engine seeded with rd()
   std::uniform_int_distribution<size_t> distrib(min_size, max_size);
@@ -25,6 +27,14 @@ std::string GenRandomString(size_t min_size, size_t max_size) {
   return data;
 }
 
+static void ThreadPoolRunWorkdloadUntilFinish(ThreadPool *tp, const std::function<void(int)> &work) {
+  tp->Shutdown();
+  tp->Start();
+  for (int i = 0; i < tp->ThreadNum(); i++) {
+    tp->AddTask([i, &work] { work(i); });
+  }
+  tp->WaitUntilAllTasksFinished();
+  tp->Shutdown();
+}
 
-
-}  // namespace pidan::test
+}  // namespace pidan

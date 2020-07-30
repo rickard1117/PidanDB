@@ -222,7 +222,7 @@ TEST(BPlusTreeNodeTest, InnerNodeNotEnoughSpace) {
   keys["abcdefghijkl"] = reinterpret_cast<Node *>(fake_child++);
   InnerNode<Key> node(1, nullptr, keys["abcdefghijkl"], "abcdefghijkl");
   for (;;) {
-    std::string s = ::pidan::test::GenRandomString(10, 100);
+    std::string s = ::pidan::GenRandomString(10, 100);
     if (!node.EnoughSpaceFor(s.size())) {
       ASSERT_FALSE(node.Insert(s, reinterpret_cast<Node *>(fake_child)));
       break;
