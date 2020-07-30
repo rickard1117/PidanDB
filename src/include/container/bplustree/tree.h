@@ -2,12 +2,22 @@
 
 #include <fstream>
 #include <functional>
+#include <iostream>
+#include <thread>
 
 #include "common/macros.h"
 #include "common/type.h"
 #include "container/bplustree/node.h"
 
 namespace pidan {
+
+// #define MARK                                                  \
+//   do {                                                        \
+//     std::thread::id this_id = std::this_thread::get_id();     \
+//     std::cerr << this_id << " - mark : " << __LINE__ << '\n'; \
+//   } while (0);
+
+#define MARK 
 
 // 支持变长key，定长value，非重复key的线程安全B+树。
 template <typename KeyType, typename ValueType>
@@ -37,6 +47,7 @@ class BPlusTree {
       bool need_restart = false;
       bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, old_val, &need_restart);
       if (need_restart) {
+        // std::cerr << "need restart" << '\n';
         continue;
       }
       return result;
@@ -107,14 +118,17 @@ class BPlusTree {
   }
 
   // 从node节点开始，向树中插入key value，插入失败返回false，否则返回true。
-  bool StartInsertUnique(Node *node, INode *parent, const uint64_t parent_version, const KeyType &key,
-                         const ValueType &val, ValueType *old_val, bool *need_restart) {
+  bool StartInsertUnique(Node *node, INode *parent, uint64_t parent_version, const KeyType &key, const ValueType &val,
+                         ValueType *old_val, bool *need_restart) {
     uint64_t version;
+    MARK;
     if (!node->ReadLockOrRestart(&version)) {
+      MARK;
       *need_restart = true;
+      // std::cerr << __LINE__ << '\n';
       return false;
     }
-
+    MARK;
     if (!node->IsLeaf()) {
       INode *inner = static_cast<INode *>(node);
       if (!inner->EnoughSpaceFor(MAX_KEY_SIZE)) {
@@ -122,27 +136,30 @@ class BPlusTree {
         if (parent) {
           if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
             *need_restart = true;
+            // std::cerr << __LINE__ << '\n';
             return false;
           }
         }
-
+        MARK;
         if (!inner->UpgradeToWriteLockOrRestart(version)) {
           if (parent) {
             parent->WriteUnlock();
           }
           *need_restart = true;
+          // std::cerr << __LINE__ << '\n';
           return false;
         }
-
+        MARK;
         // TODO: 这个地方有疑问，到底应不应该判断。
-        if (parent == nullptr && (inner != root_)) {
+        if (parent == nullptr && (inner != root_.load())) {
           // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
           // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
           inner->WriteUnlock();
           *need_restart = true;
+          // std::cerr << __LINE__ << '\n';
           return false;
         }
-
+        MARK;
         KeyType split_key;
         INode *sibling = inner->Split(&split_key);
         if (parent) {
@@ -157,61 +174,71 @@ class BPlusTree {
         }
         // 分裂完毕，重新开始插入流程。
         *need_restart = true;
+        // std::cerr << __LINE__ << '\n';
         return false;
       }
-
+      MARK;
       if (parent) {
+        MARK;
         if (!parent->ReadUnlockOrRestart(parent_version)) {
           *need_restart = true;
+          // std::cerr << __LINE__ << '\n';
           return false;
         }
       }
-
+      MARK;
       Node *child = inner->FindChild(key);
       if (!inner->CheckOrRestart(version)) {
+        MARK;
         *need_restart = true;
+        // std::cerr << __LINE__ << '\n';
         return false;
       }
+      MARK;
       return StartInsertUnique(child, inner, version, key, val, old_val, need_restart);
     }
-
+    MARK;
     LNode *leaf = static_cast<LNode *>(node);
     if (leaf->Exists(key, old_val)) {
       if (!leaf->ReadUnlockOrRestart(version)) {
         *need_restart = true;
+        // std::cerr << __LINE__ << '\n';
       } else {
         *need_restart = false;
       }
       return false;
     }
-
+    MARK;
     if (!leaf->EnoughSpaceFor(MAX_KEY_SIZE)) {
       if (parent) {
-        // leaf节点要分裂，回向父节点插入key，要先拿到父节点的写锁。
+        // leaf节点要分裂，会向父节点插入key，要先拿到父节点的写锁。
         // 之前访问父节点已经保证了父节点的空间足够，如果在访问后父节点发生了改动，那么这里会加锁失败。
         if (!parent->UpgradeToWriteLockOrRestart(parent_version)) {
           *need_restart = true;
+          // std::cerr << __LINE__ << '\n';
           return false;
         }
       }
-
+      MARK;
       if (!leaf->UpgradeToWriteLockOrRestart(version)) {
         *need_restart = true;
+        // std::cerr << __LINE__ << '\n';
         if (parent) {
           parent->WriteUnlock();
         }
         return false;
       }
-
+      MARK;
       // TODO: 这个地方有疑问，到底应不应该判断。
-      if (parent == nullptr && (leaf != root_)) {
+      if (parent == nullptr && (node != root_)) {
         // node原本是根节点，但是同时有其他线程在此线程对根节点加写锁之前已经将根节点分裂或删除了
         // 此时虽然加写锁可以成功，但根节点已经是新的节点了，因此要重启。
         leaf->WriteUnlock();
         *need_restart = true;
+        // std::cerr << __LINE__ << '\n';
         return false;
       }
-
+      MARK;
       KeyType split_key;
       LNode *sibling = leaf->Split(&split_key);
       if (parent) {
@@ -222,26 +249,29 @@ class BPlusTree {
         root_ = new INode(1, leaf, sibling, split_key);
       }
       // TODO : 分裂完毕了，此时是否可以直接将key插入到leaf或者sibling节点了，还是需要再重启一次？
-      if (key < split_key) {
-        leaf->Insert(key, val);
-      } else {
-        sibling->Insert(key, val);
-      }
+      // if (key < split_key) {
+      //   leaf->Insert(key, val);
+      // } else {
+      //   sibling->Insert(key, val);
+      // }
       leaf->WriteUnlock();
       if (parent) {
         parent->WriteUnlock();
       }
-      *need_restart = false;
-      return true;
+      *need_restart = true;
+      return false;
     } else {
       // leaf 节点空间足够，直接插入不需要再对父节点加写锁了
       if (!leaf->UpgradeToWriteLockOrRestart(version)) {
         *need_restart = true;
+        // std::cerr << __LINE__ << " address : " << leaf << '\n';
         return false;
       }
       if (parent) {
         if (!parent->ReadUnlockOrRestart(parent_version)) {
           *need_restart = true;
+          leaf->WriteUnlock();
+          // std::cerr << __LINE__ << '\n';
           return false;
         }
       }

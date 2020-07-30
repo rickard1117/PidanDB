@@ -66,8 +66,16 @@ class Node {
   bool ReadUnlockOrRestart(uint64_t version) const { return version == version_.load(); }
 
   // 将读锁升级为写锁，升级成功返回true，否则返回false。
-  bool UpgradeToWriteLockOrRestart(uint64_t version) {
-    return version_.compare_exchange_strong(version, SetLockedBit(version));
+  // bool UpgradeToWriteLockOrRestart(uint64_t version) {
+  //   return version_.compare_exchange_strong(version, SetLockedBit(version));
+  // }
+
+  bool UpgradeToWriteLockOrRestart(uint64_t &version) {
+    if(version_.compare_exchange_strong(version, SetLockedBit(version))) {
+      version += 2;
+      return true;
+    } 
+    return false;
   }
 
   // 加写锁，加锁成功返回true，否则返回false。

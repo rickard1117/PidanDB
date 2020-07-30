@@ -26,7 +26,7 @@ class BPlusTreeBenchmark : public benchmark::Fixture {
   }
 
   void TearDown(const benchmark::State &state) final {}
-  const uint32_t num_keys_ = 32000000;
+  const uint32_t num_keys_ = 3200000;
   std::vector<std::string> keys_;
 };
 
@@ -91,8 +91,40 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)(benchmark::St
   }
 }
 
+BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::State &state) {
+  pidan::BPlusTree<Key, Value> tree;
+  Value temp_val;
+  int thread_num = 2;
+
+  pidan::ThreadPool tp(thread_num);
+  auto task = [&](int thread_id) {
+    int start = (num_keys_ / thread_num) * thread_id;
+    int end = start + num_keys_ / thread_num;
+    Value val;
+    uint64_t elapsed_ms;
+    std::cerr << "thread " << thread_id << " start  working " << '\n';
+    {
+      pidan::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
+      for (int i = start; i < end; i++) {
+        tree.InsertUnique(keys_[i], 0, &val);
+      }
+    }
+    std::cerr << "thread id : " << thread_id << " insert " << end - start
+              << " keys use time (ms) : " << static_cast<double>(elapsed_ms) << '\n';
+  };
+
+  for (auto _ : state) {
+    uint64_t elapsed_ms;
+    {
+      pidan::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
+      pidan::ThreadPoolRunWorkdloadUntilFinish(&tp, task);
+    }
+    std::cerr << static_cast<double>(elapsed_ms) << '\n';
+  }
+}
+
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond);
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsert)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
-
+// BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();
