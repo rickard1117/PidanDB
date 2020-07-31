@@ -16,7 +16,7 @@ class TimestampManager {
 
   TimestampManager() = default;
 
-  void CheckOutTimestamp() { timestamp_.fetch_add(1); }
+  timestamp_t CheckOutTimestamp() { return timestamp_.fetch_add(1); }
 
   timestamp_t CurrentTime() const { return timestamp_.load(); }
 

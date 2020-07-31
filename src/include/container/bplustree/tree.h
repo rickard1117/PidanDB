@@ -2,7 +2,6 @@
 
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <thread>
 
 #include "common/macros.h"
@@ -17,7 +16,7 @@ namespace pidan {
 //     std::cerr << this_id << " - mark : " << __LINE__ << '\n'; \
 //   } while (0);
 
-#define MARK 
+#define MARK
 
 // 支持变长key，定长value，非重复key的线程安全B+树。
 template <typename KeyType, typename ValueType>

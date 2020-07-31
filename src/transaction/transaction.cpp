@@ -4,6 +4,7 @@
 
 #include "storage/data_header.h"
 #include "transaction/undo_record.h"
+#include <iostream>
 
 namespace pidan {
 
@@ -76,7 +77,10 @@ void Transaction::Rollback() {
 
 void Transaction::RollbackAllUndoRecord(DataHeader *data_header) {
   auto *undo = data_header->version_chain_.load();
-  assert(undo != nullptr);
+  if (undo == nullptr) {
+    // 证明这个事务还没来得及写如内容就要回滚了
+    return;
+  }
   while (undo->GetTimestamp() == MAX_TIMESTAMP) {
     auto result = data_header->version_chain_.compare_exchange_strong(undo, undo->Next());
     assert(result);

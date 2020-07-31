@@ -19,7 +19,7 @@ include_directories(${PIDAN_SRC_INCLUDE_DIR})
 
 option(BUILD_UNIT_TEST "build googletest unit tests" ON)
 option(BUILD_BENCHMARK "build benchmark" ON)
-option(USE_JEMALLOC "use jemalloc lib" ON)
+option(USE_JEMALLOC "use jemalloc lib" OFF)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

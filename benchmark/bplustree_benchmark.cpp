@@ -59,7 +59,7 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsert)(benchmark::State &state)
 BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)(benchmark::State &state) {
   pidan::BPlusTree<Key, Value> tree;
   Value temp_val;
-  int thread_num = 16;
+  int thread_num = 8;
 
   for (auto &k : keys_) {
     tree.InsertUnique(k, 0, &temp_val);
@@ -82,19 +82,14 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)(benchmark::St
   };
 
   for (auto _ : state) {
-    uint64_t elapsed_ms;
-    {
-      pidan::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
-      pidan::ThreadPoolRunWorkdloadUntilFinish(&tp, task);
-    }
-    std::cerr << static_cast<double>(elapsed_ms) << '\n';
+    pidan::ThreadPoolRunWorkloadUntilFinish(&tp, task);
   }
 }
 
 BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::State &state) {
   pidan::BPlusTree<Key, Value> tree;
   Value temp_val;
-  int thread_num = 2;
+  int thread_num = 8;
 
   pidan::ThreadPool tp(thread_num);
   auto task = [&](int thread_id) {
@@ -102,7 +97,6 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::St
     int end = start + num_keys_ / thread_num;
     Value val;
     uint64_t elapsed_ms;
-    std::cerr << "thread " << thread_id << " start  working " << '\n';
     {
       pidan::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
       for (int i = start; i < end; i++) {
@@ -114,17 +108,12 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::St
   };
 
   for (auto _ : state) {
-    uint64_t elapsed_ms;
-    {
-      pidan::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
-      pidan::ThreadPoolRunWorkdloadUntilFinish(&tp, task);
-    }
-    std::cerr << static_cast<double>(elapsed_ms) << '\n';
+    pidan::ThreadPoolRunWorkloadUntilFinish(&tp, task);
   }
 }
 
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond);
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsert)->Unit(benchmark::kMillisecond);
-// BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
+// BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

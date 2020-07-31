@@ -2,6 +2,8 @@
 #include <mutex>
 
 #include "transaction/timestamp_manager.h"
+#include "common/spin_latch.h"
+
 namespace pidan {
 class Transaction;
 /**
@@ -14,10 +16,10 @@ class TransactionManager {
   TransactionManager(TimestampManager *ts_manager) : ts_manager_(ts_manager) {}
 
   // 开始一个写事务
-  Transaction *BeginWriteTransaction();
+  Transaction BeginWriteTransaction();
 
   // 开始一个读事务
-  Transaction *BeginReadTransaction();
+  Transaction BeginReadTransaction();
 
   // 提交一个事务
   void Commit(Transaction *txn);
@@ -28,7 +30,9 @@ class TransactionManager {
  private:
   TimestampManager *ts_manager_;
   // txn_id_t txn_auto_id_{INIT_TXN_ID};
-  std::mutex commit_lock_;  // 此锁保证同一时间只能有一个事务进行提交
+  // std::mutex commit_lock_;  // 此锁保证同一时间只能有一个事务进行提交
+  // tbb::spin_mutex commit_lock_;
+  SpinLatch commit_lock_;
 };
 
 }  // namespace pidan

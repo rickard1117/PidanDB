@@ -20,7 +20,7 @@ class UndoRecord {
 
   std::atomic<UndoRecord *> &Next() { return next_; }
 
-  bool NewerThan(timestamp_t timestamp) { return timestamp_ > timestamp; }
+  bool NewerThan(timestamp_t timestamp) { return timestamp_.load() > timestamp; }
 
   UndoRecordType Type() const { return type_; }
 
@@ -30,7 +30,7 @@ class UndoRecord {
 
   void SetTimestamp(timestamp_t ts) { timestamp_.store(ts); }
 
-  timestamp_t GetTimestamp() { return timestamp_; }
+  timestamp_t GetTimestamp() { return timestamp_.load(); }
 
  private:
   // 只能由Transaction类来初始化成员变量

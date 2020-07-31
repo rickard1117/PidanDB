@@ -27,7 +27,7 @@ static std::string GenRandomString(size_t min_size, size_t max_size) {
   return data;
 }
 
-static void ThreadPoolRunWorkdloadUntilFinish(ThreadPool *tp, const std::function<void(int)> &work) {
+static void ThreadPoolRunWorkloadUntilFinish(ThreadPool *tp, const std::function<void(int)> &work) {
   tp->Shutdown();
   tp->Start();
   for (int i = 0; i < tp->ThreadNum(); i++) {
