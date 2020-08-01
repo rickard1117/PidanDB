@@ -258,6 +258,13 @@ TEST(BPlusTreeTest, RandomInteger) {
   }
 }
 
+TEST(BPlusTreeTest, EpochIncrecement) {
+  EpochManager epoch_manager;
+  epoch_manager.Start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(BPLUSTREE_EPOCH_INTERVAL + 50));
+  ASSERT_TRUE(epoch_manager.CurrentGlobalEpoch() > 0);
+}
+
 // TEST(BPlusTreeTest, RandomString) {
 //   std::set<std::string> kvs;
 //   BPlusTree<Key, Value> tree;

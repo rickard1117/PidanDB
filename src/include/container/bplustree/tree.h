@@ -10,11 +10,65 @@
 
 namespace pidan {
 
+class EpochManager {
+ public:
+  DISALLOW_COPY_AND_MOVE(EpochManager);
+
+  EpochManager() = default;
+
+  ~EpochManager() {
+    terminate_.store(true);
+    if (thread_ != nullptr) {
+      thread_->join();
+      delete thread_;
+    }
+  }
+
+  uint64_t CurrentGlobalEpoch() const { return epoch_; }
+
+  // 启动一个线程，不断地去更新epoch
+  void Start() {
+    terminate_.store(false);
+    thread_ = new std::thread([this] {
+      while (!terminate_) {
+        this->epoch_++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(BPLUSTREE_EPOCH_INTERVAL));
+      }
+    });
+  }
+
+ private:
+  std::atomic<bool> terminate_{true};
+  uint64_t epoch_{0};  // 当前全局的epoch
+  std::thread *thread_{nullptr};
+};
+
+// 一个垃圾节点，等待被GC的回收
+struct GarbageNode {
+  Node *node{nullptr};
+  GarbageNode *next{nullptr};
+};
+
+// GC相关的元数据，每个线程都有自己的GCMetaData
+struct GCMetaData {
+  // 当前最新的epoch，这个值是从全局epoch(存在于EpochManager里)中更新到本地的。
+  uint64_t last_active_epoch{0};
+  // 垃圾节点组成的链表的头部
+  GarbageNode header;
+  // 垃圾节点组成的链表的最后一个节点
+  GarbageNode *tail_p{&header};
+  // 当前链表中垃圾节点的个数
+  uint64_t count{0};
+};
+
+// 为了性能考虑GCMetaData的大小要等于一个CacheLine大小
+static_assert(sizeof(GCMetaData) <= CACHE_LINE_SIZE);
+
 // 支持变长key，定长value，非重复key的线程安全B+树。
 template <typename KeyType, typename ValueType>
 class BPlusTree {
  public:
-  BPlusTree() : root_(new LNode) {}
+  BPlusTree() : root_(new LNode), global_gc_metadata_(new GCMetaData[BPLUS_TREE_MAX_THREAD_NUM]) {}
 
   // 查找key对应的value，找到返回true，否则返回false。
   bool Lookup(const KeyType &key, ValueType *value) const {
@@ -293,9 +347,40 @@ class BPlusTree {
     return StartLookup(child, node, version, key, val, need_restart);
   }
 
+  // ====================================从这里开始是GC相关内容====================================
+  GCMetaData *GCMetaDataForThisThread() { return GetGCMetaData(gc_id); }
+
+  void UpdateLastActiveEpoch() { GCMetaDataForThisThread()->last_active_epoch = epoch_manager_.CurrentGlobalEpoch(); }
+
+  void JoinEpoch() { UpdateLastActiveEpoch(); }
+
+  void LeaveEpoch() { UpdateLastActiveEpoch(); }
+
+  void AssignGCID(int id) { gc_id = id; }
+
+  GCMetaData *GetGCMetaData(int index) {
+    assert(index < BPLUS_TREE_MAX_THREAD_NUM);
+    return global_gc_metadata_[index];
+  }
+
+  // 增加一个待回收的Node
+  void AddGarbageNode(Node *node) {
+    GarbageNode *garbage_node = new GarbageNode();
+    garbage_node->node = node;
+
+    // 将garbage_node插入到本线程GCMetaData的垃圾节点链表中
+    GCMetaDataForThisThread()->tail_p->next = garbage_node;
+    GCMetaDataForThisThread()->tail_p = garbage_node;
+
+    GCMetaDataForThisThread()->count++;
+  }
+
+  static thread_local inline int gc_id = -1;
+  // ====================================GC相关内容结束====================================
  private:
   std::atomic<Node *> root_;
-  // const KeyComparator key_cmp_obj_;
+  GCMetaData *global_gc_metadata_;
+  EpochManager epoch_manager_;
 };
 
 // 画出树的dot图，仅用于测试
