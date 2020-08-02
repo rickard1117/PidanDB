@@ -258,11 +258,22 @@ TEST(BPlusTreeTest, RandomInteger) {
   }
 }
 
-TEST(BPlusTreeTest, EpochIncrecement) {
-  EpochManager epoch_manager;
-  epoch_manager.Start();
-  std::this_thread::sleep_for(std::chrono::milliseconds(BPLUSTREE_EPOCH_INTERVAL + 50));
-  ASSERT_TRUE(epoch_manager.CurrentGlobalEpoch() > 0);
+TEST(BPlusTreeTest, EpochManagerTest) {
+  EpochManager epoch_manager_;
+  epoch_manager_.Start();
+
+  std::thread t([&] {
+    for (int i = 0; i < 5; i++) {
+      auto epoch = epoch_manager_.JoinEpoch();
+      epoch_manager_.AddGarbageNode(new Node());
+      epoch_manager_.LeaveEpoch(epoch);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  epoch_manager_.Stop();
+  t.join();
+  ASSERT_EQ(epoch_manager_.GarbageNodeDelNum(), 5);
 }
 
 // TEST(BPlusTreeTest, RandomString) {

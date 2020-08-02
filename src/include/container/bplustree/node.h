@@ -50,6 +50,9 @@ namespace pidan {
 // template <typename KeyType>
 class Node {
  public:
+#ifndef NDEBUG
+  Node() = default;
+#endif  // NDEBUG
   bool IsLeaf() const { return level_ == 0; }
 
   // 为节点加读锁，加锁成功返回true,并且返回当前节点的版本号。
@@ -71,10 +74,10 @@ class Node {
   // }
 
   bool UpgradeToWriteLockOrRestart(uint64_t &version) {
-    if(version_.compare_exchange_strong(version, SetLockedBit(version))) {
+    if (version_.compare_exchange_strong(version, SetLockedBit(version))) {
       version += 2;
       return true;
-    } 
+    }
     return false;
   }
 

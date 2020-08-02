@@ -89,7 +89,7 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)(benchmark::St
 BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::State &state) {
   pidan::BPlusTree<Key, Value> tree;
   Value temp_val;
-  int thread_num = 8;
+  int thread_num = 16;
 
   pidan::ThreadPool tp(thread_num);
   auto task = [&](int thread_id) {
@@ -114,6 +114,6 @@ BENCHMARK_DEFINE_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)(benchmark::St
 
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookup)->Unit(benchmark::kMillisecond);
 // BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsert)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
-// BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)->Unit(benchmark::kMillisecond);
+// BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeLookupMultiThread)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(BPlusTreeBenchmark, BPlusTreeInsertMultiThread)->Unit(benchmark::kMillisecond);
 BENCHMARK_MAIN();

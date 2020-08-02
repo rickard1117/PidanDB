@@ -33,6 +33,9 @@ static constexpr uint32_t BPLUSTREE_EPOCH_INTERVAL = 100;
 // B+树最多允许多少个不同的线程来访问
 static constexpr int BPLUS_TREE_MAX_THREAD_NUM = 256;
 
+// B+树中每个线程最多持有的GarbageNode数量
+static constexpr int BPLUS_TREE_MAX_GARBAGENODE_NUM_PER_THREAD = 128;
+
 // CPU中cache line大小
 static constexpr int CACHE_LINE_SIZE = 64;
 

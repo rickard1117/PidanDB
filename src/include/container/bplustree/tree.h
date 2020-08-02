@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <fstream>
 #include <functional>
 #include <thread>
@@ -10,13 +11,43 @@
 
 namespace pidan {
 
+// 一个垃圾节点，等待被GC的回收
+struct GarbageNode {
+  Node *node{nullptr};
+  GarbageNode *next{nullptr};
+};
+
+// 一个EpochNode存储了一个Epoch周期中待回收的垃圾数据
+struct EpochNode {
+  // 当前Epoch中活跃的线程数
+  std::atomic<uint64_t> active_thread_count{0};
+  // 当前Epoch中待回收的垃圾节点链表
+  std::atomic<GarbageNode *> garbage_list{nullptr};
+  // 下一个EpochNode
+  EpochNode *next{nullptr};
+};
+
 class EpochManager {
  public:
   DISALLOW_COPY_AND_MOVE(EpochManager);
 
-  EpochManager() = default;
+  EpochManager() : head_epoch_(new EpochNode()), current_epoch_(head_epoch_){};
 
-  ~EpochManager() {
+  ~EpochManager() { Stop(); }
+
+  // 启动一个线程，不断地去更新epoch
+  void Start() {
+    terminate_.store(false);
+    thread_ = new std::thread([this] {
+      while (!terminate_) {
+        this->PerformGC();
+        this->CreateNewEpoch();
+        std::this_thread::sleep_for(std::chrono::milliseconds(BPLUSTREE_EPOCH_INTERVAL));
+      }
+    });
+  }
+
+  void Stop() {
     terminate_.store(true);
     if (thread_ != nullptr) {
       thread_->join();
@@ -24,58 +55,100 @@ class EpochManager {
     }
   }
 
-  uint64_t CurrentGlobalEpoch() const { return epoch_; }
+  EpochNode *JoinEpoch() {
+    // 我们必须保证join的Epoch和leave的Epoch是同一个
+    EpochNode *epoch = current_epoch_;
+    current_epoch_->active_thread_count.fetch_add(1);
+    return current_epoch_;
+  }
 
-  // 启动一个线程，不断地去更新epoch
-  void Start() {
-    terminate_.store(false);
-    thread_ = new std::thread([this] {
-      while (!terminate_) {
-        this->epoch_++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(BPLUSTREE_EPOCH_INTERVAL));
+  void LeaveEpoch(EpochNode *epoch) { epoch->active_thread_count.fetch_sub(1); }
+
+  // 增加一个待回收的Node,会在其他线程调用
+  void AddGarbageNode(Node *node) {
+    // 这里要copy一份current_epoch_的复制，因为GC线程可能会调用CreateNewEpoch
+    EpochNode *epoch = current_epoch_;
+    auto *garbage = new GarbageNode();
+    garbage->node = node;
+    garbage->next = epoch->garbage_list.load();
+    for (;;) {
+      auto result = epoch->garbage_list.compare_exchange_strong(garbage->next, garbage);
+      if (result) {
+        break;
       }
-    });
+      // 如果CAS失败，那么garbage->next会更新为epoch->garbage_list的新值，则继续重试就好了。
+    }
+  }
+
+  void PerformGC() {
+    for (;;) {
+      if (head_epoch_ == current_epoch_) {
+        // 我们至少要保留一个epoch
+        return;
+      }
+      // 从head开始遍历epoch node链表
+      if (head_epoch_->active_thread_count.load() > 0) {
+        return;
+      }
+
+      // 已经没有线程在这个epoch上了，可以直接释放它所有的garbage节点。
+      while (head_epoch_->garbage_list != nullptr) {
+        GarbageNode *garbage_node = head_epoch_->garbage_list.load();
+        delete garbage_node->node;
+        head_epoch_->garbage_list = head_epoch_->garbage_list.load()->next;
+        delete garbage_node;
+#ifndef NDEBUG
+        garbage_node_del_num_.fetch_add(1);
+#endif
+      }
+      EpochNode *epoch = head_epoch_;
+      head_epoch_ = head_epoch_->next;
+      delete epoch;
+#ifndef NDEBUG
+      epoch_del_num_.fetch_add(1);
+#endif
+    }
+  }
+
+#ifndef NDEBUG
+  uint32_t GarbageNodeDelNum() {
+    return garbage_node_del_num_.load();
+  } 
+#endif
+
+  void CreateNewEpoch() {
+    auto *new_epoch = new EpochNode();
+    current_epoch_->next = new_epoch;
+    current_epoch_ = new_epoch;
   }
 
  private:
+  // Epoch链表的头结点，不需要atomic因为只有GC线程会修改和读取它
+  EpochNode *head_epoch_;
+  // 当前Epoch所在的节点，不需要atomic因为只有GC线程会修改，业务线程虽然会读取，但是读到旧数据也没关系
+  EpochNode *current_epoch_;
   std::atomic<bool> terminate_{true};
-  uint64_t epoch_{0};  // 当前全局的epoch
   std::thread *thread_{nullptr};
+#ifndef NDEBUG
+  std::atomic<uint32_t> garbage_node_del_num_{0};  // 删除的垃圾节点的数量
+  std::atomic<uint32_t> epoch_del_num_{0};         // 删除的epoch节点的数量
+#endif
 };
-
-// 一个垃圾节点，等待被GC的回收
-struct GarbageNode {
-  Node *node{nullptr};
-  GarbageNode *next{nullptr};
-};
-
-// GC相关的元数据，每个线程都有自己的GCMetaData
-struct GCMetaData {
-  // 当前最新的epoch，这个值是从全局epoch(存在于EpochManager里)中更新到本地的。
-  uint64_t last_active_epoch{0};
-  // 垃圾节点组成的链表的头部
-  GarbageNode header;
-  // 垃圾节点组成的链表的最后一个节点
-  GarbageNode *tail_p{&header};
-  // 当前链表中垃圾节点的个数
-  uint64_t count{0};
-};
-
-// 为了性能考虑GCMetaData的大小要等于一个CacheLine大小
-static_assert(sizeof(GCMetaData) <= CACHE_LINE_SIZE);
 
 // 支持变长key，定长value，非重复key的线程安全B+树。
 template <typename KeyType, typename ValueType>
 class BPlusTree {
  public:
-  BPlusTree() : root_(new LNode), global_gc_metadata_(new GCMetaData[BPLUS_TREE_MAX_THREAD_NUM]) {}
+  BPlusTree() : root_(new LNode) { }
 
   // 查找key对应的value，找到返回true，否则返回false。
   bool Lookup(const KeyType &key, ValueType *value) const {
     for (;;) {
       Node *node = root_.load();
       bool need_restart = false;
+      EpochNode *epoch = epoch_manager_.JoinEpoch();
       bool result = StartLookup(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, &need_restart);
+      epoch_manager_.LeaveEpoch(epoch);
       if (need_restart) {
         // 查找失败，需要重启整个流程。
         continue;
@@ -90,11 +163,19 @@ class BPlusTree {
     for (;;) {
       Node *node = root_.load();
       bool need_restart = false;
+      EpochNode *epoch = epoch_manager_.JoinEpoch();
       bool result = StartInsertUnique(node, nullptr, INVALID_OLC_LOCK_VERSION, key, value, old_val, &need_restart);
+      epoch_manager_.LeaveEpoch(epoch);
       if (need_restart) {
         continue;
       }
       return result;
+    }
+  }
+
+  // 查找key，如果找到，返回true并返回对应的Value值。如果没找到则返回false并构造一个新的value。
+  bool CreateIfNotExist(const KeyType &key, ValueType *new_val, const std::function<ValueType(void)> &creater) {
+    for (;;) {
     }
   }
 
@@ -311,8 +392,8 @@ class BPlusTree {
   // 从节点node开始查找key，没有找到则返回false
   bool StartLookup(const Node *node, const Node *parent, const uint64_t parent_version, const KeyType &key,
                    ValueType *val, bool *need_restart) const {
+    // a_.fetch_add(1);
     uint64_t version;
-
     if (!node->ReadLockOrRestart(&version)) {
       *need_restart = true;
       return false;
@@ -347,40 +428,9 @@ class BPlusTree {
     return StartLookup(child, node, version, key, val, need_restart);
   }
 
-  // ====================================从这里开始是GC相关内容====================================
-  GCMetaData *GCMetaDataForThisThread() { return GetGCMetaData(gc_id); }
-
-  void UpdateLastActiveEpoch() { GCMetaDataForThisThread()->last_active_epoch = epoch_manager_.CurrentGlobalEpoch(); }
-
-  void JoinEpoch() { UpdateLastActiveEpoch(); }
-
-  void LeaveEpoch() { UpdateLastActiveEpoch(); }
-
-  void AssignGCID(int id) { gc_id = id; }
-
-  GCMetaData *GetGCMetaData(int index) {
-    assert(index < BPLUS_TREE_MAX_THREAD_NUM);
-    return global_gc_metadata_[index];
-  }
-
-  // 增加一个待回收的Node
-  void AddGarbageNode(Node *node) {
-    GarbageNode *garbage_node = new GarbageNode();
-    garbage_node->node = node;
-
-    // 将garbage_node插入到本线程GCMetaData的垃圾节点链表中
-    GCMetaDataForThisThread()->tail_p->next = garbage_node;
-    GCMetaDataForThisThread()->tail_p = garbage_node;
-
-    GCMetaDataForThisThread()->count++;
-  }
-
-  static thread_local inline int gc_id = -1;
-  // ====================================GC相关内容结束====================================
  private:
   std::atomic<Node *> root_;
-  GCMetaData *global_gc_metadata_;
-  EpochManager epoch_manager_;
+  mutable EpochManager epoch_manager_;
 };
 
 // 画出树的dot图，仅用于测试
