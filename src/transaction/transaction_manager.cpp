@@ -11,11 +11,11 @@
 namespace pidan {
 
 Transaction TransactionManager::BeginWriteTransaction() {
-  return Transaction(TransactionType::WRITE, ts_manager_->CurrentTime());
+  return Transaction(TransactionType::WRITE, ts_manager_->BeginTransaction());
 }
 
 Transaction TransactionManager::BeginReadTransaction() {
-  return Transaction(TransactionType::READ, ts_manager_->CurrentTime());
+  return Transaction(TransactionType::READ, ts_manager_->BeginTransaction());
 }
 
 void TransactionManager::Commit(Transaction *txn) {
@@ -23,16 +23,24 @@ void TransactionManager::Commit(Transaction *txn) {
     return;
   }
 
-  // 这里要加锁，因为同一时间只能有一个事务提交，不能有其他事务在此期间去修改全局的timestamp
-  // const std::lock_guard<std::mutex> lock(commit_lock_);
-  timestamp_t now_ts = ts_manager_->CheckOutTimestamp();
-  // {
-  //   // SpinLatch::ScopedSpinLatch lock(&commit_lock_);
-  //   // timestamp_t now_ts = ts_manager_->CurrentTime();
-    
-  //   now_ts = ts_manager_->CheckOutTimestamp();
-  // }
-  txn->MakeWriteVisible(now_ts + 1);
+  if (txn->iso_lv_ == IsolationLevel::READ_COMMITTED) {
+    // 这里不用加锁，因为在MakeWriteVisible执行之前没有其他事务能读到txn的修改
+    // 但如果其他事务重复读的话，可能会读到不同的值。所以隔离级别是读已提交。
+    timestamp_t now_ts = ts_manager_->CurrentTime();
+    txn->MakeWriteVisible(now_ts + 1);
+    ts_manager_->CheckOutTimestamp();
+    txn->RealseAllReadLock();
+    return;
+  }
+
+  assert(txn->iso_lv_ == IsolationLevel::SERIALIZABLE);
+  {
+    // 这里要加锁，因为同一时间只能有一个事务提交，不能有其他事务在此期间去修改全局的timestamp
+    SpinLatch::ScopedSpinLatch lock(&commit_lock_);
+    timestamp_t now_ts = ts_manager_->CurrentTime();
+    txn->MakeWriteVisible(now_ts + 1);
+    ts_manager_->CheckOutTimestamp();
+  }
   txn->RealseAllReadLock();
 }
 
