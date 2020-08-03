@@ -12,7 +12,7 @@ class DataHeader;
 
 enum class TransactionType { WRITE, READ };
 
-enum class IsolationLevel {SERIALIZABLE, READ_COMMITTED};
+enum class IsolationLevel { SERIALIZABLE, READ_COMMITTED };
 
 class Transaction {
  public:
@@ -57,7 +57,6 @@ class Transaction {
   TransactionType type_;
   timestamp_t timestamp_;  // 表示事务开始的时间戳，不同事务可能开始于同一个时间戳
   IsolationLevel iso_lv_{IsolationLevel::READ_COMMITTED};
-  // uint64_t id_;            // 每个事务唯一的id
 };
 
 }  // namespace pidan

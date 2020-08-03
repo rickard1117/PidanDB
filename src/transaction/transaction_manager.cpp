@@ -10,8 +10,8 @@
 
 namespace pidan {
 
-Transaction TransactionManager::BeginWriteTransaction() {
-  return Transaction(TransactionType::WRITE, ts_manager_->BeginTransaction());
+Transaction *TransactionManager::BeginWriteTransaction() {
+  return new Transaction(TransactionType::WRITE, ts_manager_->BeginTransaction());
 }
 
 Transaction TransactionManager::BeginReadTransaction() {
@@ -42,6 +42,9 @@ void TransactionManager::Commit(Transaction *txn) {
     ts_manager_->CheckOutTimestamp();
   }
   txn->RealseAllReadLock();
+
+  SpinLatch::ScopedSpinLatch lock(&completed_txn_lock_);
+  completed_txn_.push_back(txn);
 }
 
 void TransactionManager::Abort(Transaction *txn) {

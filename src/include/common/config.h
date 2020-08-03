@@ -31,12 +31,15 @@ static constexpr uint32_t BPLUSTREE_LEAFNODE_SIZE = 4096;
 static constexpr uint32_t BPLUSTREE_EPOCH_INTERVAL = 100;
 
 // 最多有多少个线程来访问数据库
-static constexpr int MAX_ACCESS_THREAD = 16;
+static constexpr int MAX_ACCESS_THREAD = 32;
 
 // B+树中每个线程最多持有的GarbageNode数量
 static constexpr int BPLUS_TREE_MAX_GARBAGENODE_NUM_PER_THREAD = 128;
 
 // CPU中cache line大小
 static constexpr int CACHE_LINE_SIZE = 64;
+
+// Record buffer的大小
+static constexpr int BUFFER_SIZE = 1024;
 
 }

@@ -11,6 +11,8 @@ class DBImpl : public PidanDB {
  public:
   DBImpl() : txn_manager_(&ts_manager_) {}
 
+  virtual ~DBImpl() = default;
+
   virtual Status Put(const Slice &key, const Slice &value) override;
 
   virtual Status Get(const Slice &key, std::string *val) override;
